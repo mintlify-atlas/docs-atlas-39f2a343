@@ -1,0 +1,177 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "BetterModel",
+  "projectDescription": "Modern Bedrock model engine for Minecraft Java Edition with runtime BlockBench model rendering and animation",
+  "theme": "aspen",
+  "primaryColor": "#04ac5c",
+  "lightColor": "#1fd56c",
+  "darkColor": "#17221f",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/models-and-renderers",
+              "concepts/trackers",
+              "concepts/animations",
+              "concepts/bones-and-hitboxes"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/creating-models",
+              "guides/spawning-entities",
+              "guides/playing-animations",
+              "guides/custom-hitboxes",
+              "guides/player-models",
+              "guides/per-player-animation",
+              "guides/resource-pack-generation"
+            ]
+          },
+          {
+            "group": "Platform Support",
+            "pages": [
+              "platforms/bukkit-spigot-paper",
+              "platforms/fabric",
+              "platforms/folia"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/bettermodel",
+              "api/bettermodel-platform",
+              "api/bettermodel-config"
+            ]
+          },
+          {
+            "group": "Model & Rendering",
+            "pages": [
+              "api/model-renderer",
+              "api/render-pipeline",
+              "api/render-source"
+            ]
+          },
+          {
+            "group": "Trackers",
+            "pages": [
+              "api/tracker",
+              "api/entity-tracker",
+              "api/dummy-tracker",
+              "api/tracker-modifier",
+              "api/tracker-update-action"
+            ]
+          },
+          {
+            "group": "Animation",
+            "pages": [
+              "api/animation-modifier",
+              "api/animation-iterator",
+              "api/blueprint-animation",
+              "api/tracker-animation"
+            ]
+          },
+          {
+            "group": "Bones & Hit Detection",
+            "pages": [
+              "api/rendered-bone",
+              "api/bone-name",
+              "api/bone-predicate",
+              "api/hitbox",
+              "api/hitbox-listener"
+            ]
+          },
+          {
+            "group": "Entity & Location",
+            "pages": [
+              "api/base-entity",
+              "api/platform-entity",
+              "api/platform-location",
+              "api/platform-player"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/model-rotation",
+              "api/model-scaler",
+              "api/model-profile"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Common Use Cases",
+            "pages": [
+              "examples/basic-entity-model",
+              "examples/animated-npc",
+              "examples/custom-armor-model",
+              "examples/dynamic-boss",
+              "examples/player-cosmetics"
+            ]
+          },
+          {
+            "group": "Advanced Examples",
+            "pages": [
+              "examples/conditional-animations",
+              "examples/multi-part-entities",
+              "examples/custom-events",
+              "examples/performance-optimization"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Server-side 3D BlockBench model rendering using item display entities",
+    "Runtime animation playback with per-player animation support",
+    "Auto-generating resource packs from .bbmodel files",
+    "Custom hitbox creation and interaction handling",
+    "12-limb player model animation support",
+    "Entity-synced model tracking",
+    "High-performance design optimized for large servers",
+    "Multi-platform support (Bukkit, Paper, Spigot, Folia, Fabric)"
+  ],
+  "publicApiSurface": [
+    "BetterModel.model(String)",
+    "BetterModel.limb(String)",
+    "BetterModel.registry(UUID)",
+    "ModelRenderer.create(BaseEntity)",
+    "ModelRenderer.create(PlatformLocation)",
+    "Tracker.animate(String, AnimationModifier)",
+    "Tracker.update(TrackerUpdateAction)",
+    "Tracker.createHitBox(BaseEntity, HitBoxListener, BonePredicate)",
+    "EntityTracker.getOrCreate(BaseEntity)",
+    "DummyTracker.create(PlatformLocation)",
+    "TrackerUpdateAction.tint(int)",
+    "TrackerUpdateAction.brightness(int, int)",
+    "TrackerUpdateAction.billboard(Display.Billboard)",
+    "AnimationModifier.loop(boolean)",
+    "AnimationModifier.speed(double)",
+    "BukkitAdapter.adapt(Entity)",
+    "BukkitAdapter.adapt(Location)",
+    "BukkitAdapter.adapt(Player)"
+  ]
+}
