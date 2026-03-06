@@ -1,0 +1,579 @@
+---
+title: RenderPipeline
+description: Manages the rendering pipeline for a specific model instance
+---
+
+## Overview
+
+The `RenderPipeline` class represents the rendering pipeline for a specific model instance. It manages the hierarchy of rendered bones, handles player visibility and packet bundling, and coordinates animation updates and inverse kinematics (IK) solving.
+
+## Constructor
+
+```java
+public RenderPipeline(
+    @NotNull ModelRenderer parent,
+    @NotNull RenderSource<?> source,
+    @NotNull RenderedBone[] bones
+)
+```
+
+Creates a new render pipeline instance.
+
+**Parameters:**
+- `parent` - The parent model renderer
+- `source` - The source of the rendering (entity or location)
+- `bones` - The array of root bones
+
+## Core Properties
+
+### getParent
+
+```java
+public ModelRenderer getParent()
+```
+
+Returns the parent `ModelRenderer` that created this pipeline.
+
+### getSource
+
+```java
+public RenderSource<?> getSource()
+```
+
+Returns the `RenderSource` providing location and context data.
+
+### getRotation
+
+```java
+public ModelRotation getRotation()
+```
+
+Returns the current rotation state of the model.
+
+### name
+
+```java
+public @NotNull String name()
+```
+
+Returns the name of the parent model renderer.
+
+## Bone Management
+
+### bones
+
+```java
+public @NotNull @Unmodifiable Collection<RenderedBone> bones()
+```
+
+Returns an unmodifiable collection of all bones in the pipeline.
+
+### boneOf
+
+```java
+public @Nullable RenderedBone boneOf(@NotNull BoneName name)
+```
+
+Retrieves a specific bone by its name.
+
+**Parameters:**
+- `name` - The bone name to search for
+
+**Returns:** The rendered bone, or null if not found
+
+### stream
+
+```java
+public @NotNull Stream<RenderedBone> stream()
+```
+
+Returns a sequential stream of all flattened bones.
+
+### hitboxes
+
+```java
+public @NotNull Stream<HitBox> hitboxes()
+```
+
+Returns a stream of all hitboxes associated with the model.
+
+**Example:**
+```java
+RenderPipeline pipeline = tracker.pipeline();
+
+// Access specific bone
+RenderedBone headBone = pipeline.boneOf(BoneName.of("head"));
+if (headBone != null) {
+    headBone.scale(1.5f);
+}
+
+// Iterate all bones
+pipeline.bones().forEach(bone -> {
+    System.out.println("Bone: " + bone.name());
+});
+
+// Work with hitboxes
+pipeline.hitboxes().forEach(hitbox -> {
+    hitbox.setInteractive(true);
+});
+```
+
+## Animation & Updates
+
+### tick
+
+```java
+public boolean tick(@NotNull PacketBundler bundler)
+public boolean tick(@NotNull UUID uuid, @NotNull PacketBundler bundler)
+```
+
+Ticks the model, updating animations and inverse kinematics.
+
+**Parameters:**
+- `bundler` - The packet bundler for sending updates
+- `uuid` - (Optional) Player UUID for per-player animations
+
+**Returns:** `true` if any updates occurred
+
+### runningAnimation
+
+```java
+public @Nullable RunningAnimation runningAnimation()
+```
+
+Retrieves the currently running animation, if any.
+
+### rotate
+
+```java
+public boolean rotate(@NotNull ModelRotation rotation, @NotNull PacketBundler bundler)
+```
+
+Rotates the model to a new orientation.
+
+**Parameters:**
+- `rotation` - The new rotation
+- `bundler` - The packet bundler to use
+
+**Returns:** `true` if the rotation changed, `false` otherwise
+
+**Example:**
+```java
+PacketBundler bundler = pipeline.createBundler();
+
+// Tick the pipeline
+if (pipeline.tick(bundler)) {
+    // Send updates to players
+    pipeline.allPlayer().forEach(bundler::send);
+}
+
+// Rotate model
+ModelRotation rotation = ModelRotation.of(0, 90, 0);
+pipeline.rotate(rotation, bundler);
+
+// Check current animation
+RunningAnimation anim = pipeline.runningAnimation();
+if (anim != null) {
+    System.out.println("Playing: " + anim.name());
+}
+```
+
+## Bone Modifiers
+
+### addRotationModifier
+
+```java
+public boolean addRotationModifier(
+    @NotNull BonePredicate predicate,
+    @NotNull Function<Quaternionf, Quaternionf> mapper
+)
+```
+
+Adds a rotation modifier to bones matching the predicate.
+
+**Parameters:**
+- `predicate` - The predicate to select bones
+- `mapper` - The rotation mapping function
+
+**Returns:** `true` if any bones were modified
+
+### addPositionModifier
+
+```java
+public boolean addPositionModifier(
+    @NotNull BonePredicate predicate,
+    @NotNull Function<Vector3f, Vector3f> mapper
+)
+```
+
+Adds a position modifier to bones matching the predicate.
+
+**Parameters:**
+- `predicate` - The predicate to select bones
+- `mapper` - The position mapping function
+
+**Returns:** `true` if any bones were modified
+
+### defaultPosition
+
+```java
+public void defaultPosition(@NotNull Function<Vector3f, Vector3f> movement)
+```
+
+Sets the default position modifier for all bones.
+
+### scale
+
+```java
+public void scale(@NotNull FloatSupplier scale)
+```
+
+Scales the entire model.
+
+**Example:**
+```java
+// Scale the entire model
+pipeline.scale(() -> 1.5f);
+
+// Move all bones up by 1 block
+pipeline.defaultPosition(pos -> pos.add(0, 1, 0));
+
+// Rotate head bones to look at player
+pipeline.addRotationModifier(
+    BonePredicate.name("head"),
+    rotation -> rotation.rotateY((float) Math.toRadians(45))
+);
+
+// Offset arm positions
+pipeline.addPositionModifier(
+    BonePredicate.name("arm_right"),
+    pos -> pos.add(0.5f, 0, 0)
+);
+```
+
+## Player Visibility
+
+### isSpawned
+
+```java
+public boolean isSpawned(@NotNull UUID uuid)
+```
+
+Checks if the model is spawned for a specific player.
+
+### playerCount
+
+```java
+public int playerCount()
+```
+
+Returns the number of players currently viewing the model.
+
+### allPlayer
+
+```java
+public @NotNull Stream<PlatformPlayer> allPlayer()
+```
+
+Returns a stream of all players viewing the model.
+
+### viewedPlayer
+
+```java
+public @NotNull Stream<PlatformPlayer> viewedPlayer()
+```
+
+Returns a stream of players who pass the view filter.
+
+### nonHidePlayer
+
+```java
+public @NotNull Stream<PlatformPlayer> nonHidePlayer()
+```
+
+Returns a stream of players who are not hidden and pass the view filter.
+
+**Example:**
+```java
+// Check if spawned for specific player
+if (pipeline.isSpawned(player.uuid())) {
+    System.out.println("Model visible to player");
+}
+
+// Count viewers
+int viewerCount = pipeline.playerCount();
+
+// Send message to all viewers
+pipeline.allPlayer().forEach(p -> {
+    p.sendMessage("Model updated!");
+});
+```
+
+## Hide/Show
+
+### hide
+
+```java
+public boolean hide(@NotNull PlatformPlayer player)
+```
+
+Hides the model from a specific player.
+
+**Returns:** `true` if the player was successfully hidden
+
+### show
+
+```java
+public boolean show(@NotNull PlatformPlayer player)
+```
+
+Shows the model to a specific player (if previously hidden).
+
+**Returns:** `true` if the player was successfully shown
+
+### isHide
+
+```java
+public boolean isHide(@NotNull PlatformPlayer player)
+```
+
+Checks if the model is hidden from a specific player.
+
+**Example:**
+```java
+// Hide from specific player
+pipeline.hide(player);
+
+// Check visibility
+if (pipeline.isHide(player)) {
+    // Show again
+    pipeline.show(player);
+}
+```
+
+## Filters & Handlers
+
+### viewFilter
+
+```java
+public void viewFilter(@NotNull Predicate<PlatformPlayer> filter)
+```
+
+Adds a filter to restrict which players can view the model.
+
+### hideFilter
+
+```java
+public void hideFilter(@NotNull Predicate<PlatformPlayer> filter)
+```
+
+Adds a filter to determine if a player should be hidden from the model.
+
+### Packet Handlers
+
+```java
+public void spawnPacketHandler(@NotNull Consumer<PacketBundler> handler)
+public void despawnPacketHandler(@NotNull Consumer<PacketBundler> handler)
+public void hidePacketHandler(@NotNull Consumer<PacketBundler> handler)
+public void showPacketHandler(@NotNull Consumer<PacketBundler> handler)
+```
+
+Adds handlers for various packet events.
+
+**Example:**
+```java
+// Only show to players in adventure mode
+pipeline.viewFilter(player -> 
+    player.gameMode() == GameMode.ADVENTURE
+);
+
+// Hide from vanished players
+pipeline.hideFilter(player -> player.isVanished());
+
+// Add spawn packet handler
+pipeline.spawnPacketHandler(bundler -> {
+    System.out.println("Model spawned!");
+});
+```
+
+## Packet Bundling
+
+### createBundler
+
+```java
+public @NotNull PacketBundler createBundler()
+```
+
+Creates a packet bundler for this pipeline.
+
+### createParallelBundler
+
+```java
+public @NotNull PacketBundler createParallelBundler()
+```
+
+Creates a parallel packet bundler based on configuration.
+
+### channel
+
+```java
+public @Nullable PlayerChannelHandler channel(@NotNull UUID uuid)
+```
+
+Retrieves the channel handler for a specific player.
+
+**Example:**
+```java
+// Create bundler for updates
+PacketBundler bundler = pipeline.createBundler();
+pipeline.tick(bundler);
+
+// Send to all players
+pipeline.allPlayer().forEach(bundler::send);
+
+// Use parallel bundler for better performance
+PacketBundler parallel = pipeline.createParallelBundler();
+```
+
+## Tree Operations
+
+### matchTree
+
+```java
+public boolean matchTree(@NotNull Predicate<RenderedBone> predicate)
+public boolean matchTree(
+    @NotNull BonePredicate predicate,
+    BiPredicate<RenderedBone, BonePredicate> mapper
+)
+```
+
+Applies operations to bones matching a predicate.
+
+### matchAnimation
+
+```java
+public boolean matchAnimation(
+    @NotNull BiPredicate<RenderedBone, AnimationOverrideState> mapper
+)
+```
+
+Applies a mapper to bones matching an animation predicate.
+
+### firstNotNull
+
+```java
+public <T> @Nullable T firstNotNull(@NotNull Function<RenderedBone, T> mapper)
+```
+
+Finds the first non-null result of applying a mapper to all bones.
+
+**Example:**
+```java
+// Find first bone with hitbox
+HitBox hitbox = pipeline.firstNotNull(RenderedBone::getHitBox);
+
+// Apply operation to all leg bones
+pipeline.matchTree(
+    BonePredicate.name("leg"),
+    (bone, pred) -> {
+        bone.scale(1.2f);
+        return true;
+    }
+);
+```
+
+## Lifecycle
+
+### despawn
+
+```java
+public void despawn()
+```
+
+Despawns the model for all players and clears internal state.
+
+**Example:**
+```java
+// Clean up when done
+pipeline.despawn();
+```
+
+## Event Handling
+
+### eventDispatcher
+
+```java
+public @NotNull BoneEventDispatcher eventDispatcher()
+```
+
+Returns the bone event dispatcher for this pipeline.
+
+## Iteration
+
+The `RenderPipeline` implements `Iterable<RenderedBone>`, allowing direct iteration:
+
+```java
+for (RenderedBone bone : pipeline) {
+    System.out.println("Bone: " + bone.name());
+}
+
+// Or with forEach
+pipeline.forEach(bone -> {
+    bone.setVisible(true);
+});
+```
+
+## Complete Example
+
+```java
+// Get pipeline from tracker
+EntityTracker tracker = renderer.create(entity);
+RenderPipeline pipeline = tracker.pipeline();
+
+// Configure visibility
+pipeline.viewFilter(p -> p.world().equals(entity.world()));
+pipeline.hideFilter(p -> p.isInvisible());
+
+// Add packet handlers
+pipeline.spawnPacketHandler(b -> {
+    System.out.println("Model spawned for players");
+});
+
+// Modify bones
+pipeline.scale(() -> 1.5f);
+pipeline.addRotationModifier(
+    BonePredicate.name("head"),
+    rot -> rot.rotateY((float) Math.toRadians(headYaw))
+);
+
+// Update loop
+BukkitRunnable task = new BukkitRunnable() {
+    @Override
+    public void run() {
+        PacketBundler bundler = pipeline.createBundler();
+        
+        if (pipeline.tick(bundler)) {
+            pipeline.nonHidePlayer().forEach(bundler::send);
+        }
+        
+        // Check if animation finished
+        RunningAnimation anim = pipeline.runningAnimation();
+        if (anim == null) {
+            // Start idle animation
+            tracker.play("idle");
+        }
+    }
+};
+task.runTaskTimer(plugin, 0L, 1L);
+
+// Cleanup when done
+task.cancel();
+pipeline.despawn();
+```
+
+## See Also
+
+- [ModelRenderer](/api/model-renderer) - Creates pipelines via trackers
+- [RenderSource](/api/render-source) - Provides location and context
+- [RenderedBone](/api/rendered-bone) - Individual bone in the pipeline
+- [Tracker](/api/tracker) - Owns the pipeline instance

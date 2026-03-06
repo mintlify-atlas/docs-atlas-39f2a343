@@ -1,0 +1,164 @@
+---
+title: ModelRotation
+description: Represents the rotation of a model in degrees
+---
+
+## Overview
+
+The `ModelRotation` class represents the rotation of a model in degrees, storing pitch (x) and yaw (y) values. It provides utility methods for conversion between degrees, radians, and Minecraft's packed byte format.
+
+## Class Definition
+
+```java
+public record ModelRotation(float x, float y)
+```
+
+**Parameters:**
+- `x` - The pitch (x-rotation) in degrees
+- `y` - The yaw (y-rotation) in degrees
+
+## Constants
+
+### EMPTY
+
+```java
+public static final ModelRotation EMPTY
+```
+
+A rotation of (0, 0), representing no rotation.
+
+### INVALID
+
+```java
+public static final ModelRotation INVALID
+```
+
+An invalid rotation value (Float.MAX_VALUE, Float.MAX_VALUE) used for initialization or error states.
+
+## Methods
+
+### pitch()
+
+Returns a new rotation with only the pitch component.
+
+```java
+public @NotNull ModelRotation pitch()
+```
+
+**Returns:** The pitch-only rotation (x, 0)
+
+**Example:**
+```java
+ModelRotation rotation = new ModelRotation(45.0f, 90.0f);
+ModelRotation pitchOnly = rotation.pitch(); // (45.0, 0.0)
+```
+
+### yaw()
+
+Returns a new rotation with only the yaw component.
+
+```java
+public @NotNull ModelRotation yaw()
+```
+
+**Returns:** The yaw-only rotation (0, y)
+
+**Example:**
+```java
+ModelRotation rotation = new ModelRotation(45.0f, 90.0f);
+ModelRotation yawOnly = rotation.yaw(); // (0.0, 90.0)
+```
+
+### radianX()
+
+Returns the pitch in radians.
+
+```java
+public float radianX()
+```
+
+**Returns:** The pitch in radians
+
+**Example:**
+```java
+ModelRotation rotation = new ModelRotation(180.0f, 0.0f);
+float radians = rotation.radianX(); // ~3.14159 (π)
+```
+
+### radianY()
+
+Returns the yaw in radians.
+
+```java
+public float radianY()
+```
+
+**Returns:** The yaw in radians
+
+**Example:**
+```java
+ModelRotation rotation = new ModelRotation(0.0f, 90.0f);
+float radians = rotation.radianY(); // ~1.5708 (π/2)
+```
+
+### packedX()
+
+Returns the pitch packed as a byte in Minecraft protocol format.
+
+```java
+public byte packedX()
+```
+
+**Returns:** The packed pitch value
+
+**Note:** Minecraft uses packed bytes to represent rotations in network packets, where a full 360° rotation is represented by 256 discrete steps.
+
+### packedY()
+
+Returns the yaw packed as a byte in Minecraft protocol format.
+
+```java
+public byte packedY()
+```
+
+**Returns:** The packed yaw value
+
+## Usage Example
+
+```java
+import kr.toxicity.model.api.tracker.ModelRotation;
+
+// Create a rotation
+ModelRotation rotation = new ModelRotation(45.0f, 90.0f);
+
+// Access pitch and yaw
+float pitch = rotation.x(); // 45.0
+float yaw = rotation.y();   // 90.0
+
+// Convert to radians
+float pitchRadians = rotation.radianX();
+float yawRadians = rotation.radianY();
+
+// Extract individual components
+ModelRotation pitchOnly = rotation.pitch();
+ModelRotation yawOnly = rotation.yaw();
+
+// Get packed values for network transmission
+byte packedPitch = rotation.packedX();
+byte packedYaw = rotation.packedY();
+
+// Use constants
+ModelRotation noRotation = ModelRotation.EMPTY;
+if (rotation.equals(ModelRotation.INVALID)) {
+    // Handle invalid rotation
+}
+```
+
+## Equality and Hashing
+
+The `ModelRotation` record uses packed values for equality checks and hash code calculation, ensuring that rotations are compared based on their Minecraft protocol representation rather than raw float values.
+
+## See Also
+
+- [ModelScaler](/api/model-scaler) - For scaling models
+- [Tracker](/api/tracker) - For tracking model state

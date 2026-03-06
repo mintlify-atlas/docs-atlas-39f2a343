@@ -1,0 +1,481 @@
+---
+title: HitBoxListener
+description: Event listener interface for handling hitbox interactions and lifecycle events
+---
+
+The `HitBoxListener` interface provides a builder-based system for handling events related to hitboxes, including interactions, damage, mounting, and lifecycle events.
+
+## Class Information
+
+**Package:** `kr.toxicity.model.api.nms`  
+**Type:** Interface  
+**Since:** 1.15.2
+
+## Overview
+
+Hitbox listeners enable custom behavior when players or entities interact with model hitboxes. The builder pattern allows composing multiple event handlers together.
+
+## Creating Listeners
+
+### Empty Listener
+
+```java
+public static final HitBoxListener EMPTY
+```
+
+A no-op listener that does nothing. Useful as a default.
+
+### Builder Creation
+
+```java
+public static Builder builder()
+```
+
+Creates a new builder for constructing listeners.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .interact(event -> {
+        // Handle interaction
+    })
+    .damage(event -> {
+        // Handle damage
+    })
+    .build();
+```
+
+## Event Handlers
+
+### Interaction Events
+
+#### Basic Interaction
+
+```java
+public Builder interact(Consumer<HitBoxInteractEvent> interact)
+```
+
+Triggered when a player right-clicks the hitbox.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .interact(event -> {
+        PlatformPlayer player = event.player();
+        HitBox hitBox = event.getHitBox();
+        ModelInteractionHand hand = event.hand();
+        
+        player.sendMessage("You clicked " + hitBox.groupName() + " with " + hand);
+        
+        // Cancel the event to prevent default behavior
+        event.setCancelled(true);
+    })
+    .build();
+```
+
+#### Interact At Position
+
+```java
+public Builder interactAt(Consumer<HitBoxInteractAtEvent> interactAt)
+```
+
+Triggered when a player right-clicks at a specific position on the hitbox.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .interactAt(event -> {
+        Vector3f position = event.position();
+        player.sendMessage(String.format(
+            "Clicked at position: %.2f, %.2f, %.2f",
+            position.x, position.y, position.z
+        ));
+    })
+    .build();
+```
+
+### Damage Events
+
+```java
+public Builder damage(Consumer<HitBoxDamagedEvent> damage)
+```
+
+Triggered when the hitbox takes damage.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .damage(event -> {
+        PlatformPlayer attacker = event.player();
+        HitBox hitBox = event.getHitBox();
+        double damage = event.damage();
+        
+        attacker.sendMessage("You dealt " + damage + " damage to " + hitBox.groupName());
+        
+        // Apply custom damage logic
+        if (damage > 10) {
+            attacker.sendMessage("Critical hit!");
+        }
+        
+        // Allow damage to process
+        event.setCancelled(false);
+    })
+    .build();
+```
+
+### Mount Events
+
+#### Entity Mounted
+
+```java
+public Builder mount(BiConsumer<HitBox, PlatformEntity> mount)
+```
+
+Triggered when an entity mounts the hitbox.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .mount((hitBox, entity) -> {
+        if (entity instanceof PlatformPlayer player) {
+            player.sendMessage("You are now riding " + hitBox.groupName());
+            player.sendMessage("Press SHIFT to dismount");
+        }
+    })
+    .build();
+```
+
+#### Entity Dismounted
+
+```java
+public Builder dismount(BiConsumer<HitBox, PlatformEntity> dismount)
+```
+
+Triggered when an entity dismounts from the hitbox.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .dismount((hitBox, entity) -> {
+        if (entity instanceof PlatformPlayer player) {
+            player.sendMessage("You dismounted from " + hitBox.groupName());
+        }
+    })
+    .build();
+```
+
+### Lifecycle Events
+
+#### Creation
+
+```java
+public Builder create(Consumer<HitBox> create)
+```
+
+Triggered when the hitbox is created.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .create(hitBox -> {
+        System.out.println("Hitbox created: " + hitBox.groupName());
+        // Initialize custom data
+        customData.put(hitBox.uuid(), new HitBoxData());
+    })
+    .build();
+```
+
+#### Removal
+
+```java
+public Builder remove(Consumer<HitBox> remove)
+```
+
+Triggered when the hitbox is removed.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .remove(hitBox -> {
+        System.out.println("Hitbox removed: " + hitBox.groupName());
+        // Cleanup custom data
+        customData.remove(hitBox.uuid());
+    })
+    .build();
+```
+
+#### Tick Synchronization
+
+```java
+public Builder sync(Consumer<HitBox> sync)
+```
+
+Called every tick to synchronize hitbox state.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .sync(hitBox -> {
+        // Update every tick
+        if (hitBox.onWalk()) {
+            // Rider is walking, trigger animation
+            hitBox.positionSource().addAnimation(...);
+        }
+        
+        // Update custom displays or effects
+        updateParticles(hitBox);
+    })
+    .build();
+```
+
+## Generic Event Handling
+
+```java
+public <T extends HitBoxEvent> Builder listen(
+    Class<T> eventClass,
+    Consumer<T> consumer
+)
+```
+
+Register a handler for any hitbox event type.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .listen(HitBoxInteractEvent.class, event -> {
+        // Handle interact event
+    })
+    .listen(HitBoxDamagedEvent.class, event -> {
+        // Handle damage event
+    })
+    .listen(CustomHitBoxEvent.class, event -> {
+        // Handle custom event
+    })
+    .build();
+```
+
+## Builder Methods
+
+All builder methods return the builder for chaining:
+
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .interact(event -> { /* ... */ })
+    .damage(event -> { /* ... */ })
+    .mount((box, entity) -> { /* ... */ })
+    .dismount((box, entity) -> { /* ... */ })
+    .create(box -> { /* ... */ })
+    .remove(box -> { /* ... */ })
+    .sync(box -> { /* ... */ })
+    .build();
+```
+
+## Modifying Existing Listeners
+
+```java
+public Builder toBuilder()
+```
+
+Converts a listener back to a builder to add more handlers.
+
+**Example:**
+```java
+HitBoxListener baseListener = HitBoxListener.builder()
+    .interact(event -> {
+        System.out.println("Base interaction");
+    })
+    .build();
+
+// Extend the listener
+HitBoxListener extendedListener = baseListener.toBuilder()
+    .damage(event -> {
+        System.out.println("Added damage handler");
+    })
+    .build();
+```
+
+## Internal Methods
+
+```java
+@ApiStatus.Internal
+boolean handle(HitBoxEvent event)
+
+@ApiStatus.Internal
+void sync(HitBox hitBox)
+```
+
+These methods are called internally by the hitbox implementation and should not be invoked directly.
+
+## Complete Examples
+
+### Interactive NPC
+
+```java
+public HitBoxListener createNPCListener() {
+    Map<UUID, Integer> clickCounts = new ConcurrentHashMap<>();
+    
+    return HitBoxListener.builder()
+        .interact(event -> {
+            PlatformPlayer player = event.player();
+            HitBox hitBox = event.getHitBox();
+            
+            int clicks = clickCounts.merge(player.uuid(), 1, Integer::sum);
+            
+            switch (clicks) {
+                case 1 -> player.sendMessage("Hello traveler!");
+                case 2 -> player.sendMessage("Need something?");
+                case 3 -> player.sendMessage("Stop clicking me!");
+                default -> {
+                    player.sendMessage("Fine, here's a quest.");
+                    clickCounts.remove(player.uuid());
+                }
+            }
+        })
+        .damage(event -> {
+            event.player().sendMessage("You can't attack NPCs!");
+            event.setCancelled(true);
+        })
+        .remove(hitBox -> {
+            clickCounts.clear();
+        })
+        .build();
+}
+```
+
+### Combat Target Dummy
+
+```java
+public HitBoxListener createDummyListener() {
+    Map<UUID, Double> totalDamage = new ConcurrentHashMap<>();
+    
+    return HitBoxListener.builder()
+        .create(hitBox -> {
+            System.out.println("Combat dummy spawned: " + hitBox.groupName());
+        })
+        .damage(event -> {
+            PlatformPlayer player = event.player();
+            double damage = event.damage();
+            
+            double total = totalDamage.merge(player.uuid(), damage, Double::sum);
+            
+            player.sendMessage(String.format(
+                "Hit! Damage: %.1f | Total: %.1f",
+                damage, total
+            ));
+            
+            // Flash red on hit
+            HitBox hitBox = event.getHitBox();
+            hitBox.positionSource().tint(b -> true, 0xFF0000);
+            
+            // Reset color after delay
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                hitBox.positionSource().tint(b -> true, 0xFFFFFF);
+            }, 10L);
+        })
+        .remove(hitBox -> {
+            // Display final stats
+            totalDamage.forEach((uuid, damage) -> {
+                Bukkit.getPlayer(uuid).ifPresent(player -> {
+                    player.sendMessage("Final damage dealt: " + damage);
+                });
+            });
+            totalDamage.clear();
+        })
+        .build();
+}
+```
+
+### Rideable Vehicle
+
+```java
+public HitBoxListener createVehicleListener() {
+    return HitBoxListener.builder()
+        .interact(event -> {
+            PlatformPlayer player = event.player();
+            HitBox hitBox = event.getHitBox();
+            
+            if (player.isSneaking()) {
+                if (hitBox.hasMountDriver()) {
+                    hitBox.dismount(player.entity());
+                }
+            } else {
+                if (!hitBox.hasMountDriver()) {
+                    hitBox.mount(player.entity());
+                } else {
+                    player.sendMessage("This vehicle is already in use!");
+                }
+            }
+        })
+        .mount((hitBox, entity) -> {
+            if (entity instanceof PlatformPlayer player) {
+                player.sendMessage("You are now driving!");
+                player.sendMessage("Use WASD to move, SHIFT to exit");
+                
+                // Start engine animation
+                hitBox.positionSource().addAnimation(...);
+            }
+        })
+        .dismount((hitBox, entity) -> {
+            if (entity instanceof PlatformPlayer player) {
+                player.sendMessage("You exited the vehicle");
+                
+                // Stop engine animation
+                hitBox.positionSource().stopAnimation(...);
+            }
+        })
+        .sync(hitBox -> {
+            if (hitBox.onWalk() && hitBox.hasBeenControlled()) {
+                // Play movement animation
+                // Add exhaust particles
+                Vector3f pos = hitBox.positionSource().worldPosition();
+                spawnExhaustParticles(pos);
+            }
+        })
+        .damage(event -> {
+            // Vehicles take damage
+            event.player().sendMessage("The vehicle was damaged!");
+            // Could add durability system here
+        })
+        .build();
+}
+```
+
+### Collectible Item
+
+```java
+public HitBoxListener createCollectibleListener(ItemStack reward) {
+    return HitBoxListener.builder()
+        .interact(event -> {
+            PlatformPlayer player = event.player();
+            HitBox hitBox = event.getHitBox();
+            
+            // Give reward
+            player.inventory().addItem(reward);
+            player.sendMessage("You collected an item!");
+            
+            // Play collection animation
+            RenderedBone bone = hitBox.positionSource();
+            bone.addPositionModifier(
+                b -> true,
+                pos -> pos.add(0, 0.5f, 0)
+            );
+            
+            // Remove after animation
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                hitBox.removeHitBox();
+            }, 20L);
+        })
+        .create(hitBox -> {
+            // Spawn with floating animation
+            RenderedBone bone = hitBox.positionSource();
+            // Add bobbing animation...
+        })
+        .build();
+}
+```
+
+## See Also
+
+- [HitBox](/api/hitbox) - Hitbox management and operations
+- [RenderedBone](/api/rendered-bone) - Creating hitboxes on bones
+- [HitBoxEvent](/api/hitbox-event) - Event types and handling

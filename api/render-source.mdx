@@ -1,0 +1,482 @@
+---
+title: RenderSource
+description: Source abstraction for rendering models at locations or attached to entities
+---
+
+## Overview
+
+The `RenderSource` interface represents a source for rendering models, providing the necessary context such as location and entity data. It serves as the entry point for creating tracker instances and supports both entity-based and location-based (dummy) rendering.
+
+## Interface Hierarchy
+
+```java
+sealed interface RenderSource<T extends Tracker>
+    ├── Entity (sealed)
+    │   ├── BaseEntity
+    │   ├── ProfiledEntity
+    │   ├── BasePlayer
+    │   └── ProfiledPlayer
+    └── Dummy (sealed)
+        ├── BaseDummy
+        └── ProfiledDummy
+```
+
+## Factory Methods
+
+These static methods create appropriate `RenderSource` instances:
+
+### Location-Based Sources
+
+```java
+static @NotNull RenderSource.Dummy of(@NotNull PlatformLocation location)
+```
+
+Creates a dummy render source at the specified location.
+
+**Parameters:**
+- `location` - The world location where the model will be rendered
+
+**Returns:** A new `BaseDummy` instance
+
+```java
+static @NotNull RenderSource.Dummy of(
+    @NotNull PlatformLocation location,
+    @NotNull ModelProfile.Uncompleted profile
+)
+```
+
+Creates a dummy render source with a specific model profile.
+
+**Parameters:**
+- `location` - The world location
+- `profile` - The uncompleted model profile (skin/texture)
+
+**Returns:** A new `ProfiledDummy` instance
+
+### Entity-Based Sources
+
+```java
+static @NotNull RenderSource.Entity of(@NotNull BaseEntity entity)
+```
+
+Creates an entity render source for the given entity.
+
+**Parameters:**
+- `entity` - The entity to attach the model to
+
+**Returns:** `BasePlayer` if entity is a player, otherwise `BaseEntity`
+
+```java
+static @NotNull RenderSource.Entity of(
+    @NotNull BaseEntity entity,
+    @NotNull ModelProfile.Uncompleted profile
+)
+```
+
+Creates an entity render source with a specific model profile.
+
+**Parameters:**
+- `entity` - The entity to attach to
+- `profile` - The model profile
+
+**Returns:** `ProfiledPlayer` if entity is a player, otherwise `ProfiledEntity`
+
+## Core Methods
+
+### location
+
+```java
+@NotNull PlatformLocation location()
+```
+
+Returns the location of this render source.
+
+### create
+
+```java
+T create(
+    @NotNull RenderPipeline pipeline,
+    @NotNull TrackerModifier modifier,
+    @NotNull Consumer<T> preUpdateConsumer
+)
+```
+
+Creates a new tracker for this render source.
+
+**Parameters:**
+- `pipeline` - The render pipeline to use
+- `modifier` - The tracker modifier for behavior configuration
+- `preUpdateConsumer` - Consumer to run before each update
+
+**Returns:** The created tracker (type depends on source type)
+
+### completeContext
+
+```java
+@NotNull CompletableFuture<BoneRenderContext> completeContext()
+```
+
+Asynchronously completes the bone render context for this source. This may involve fetching skin data or other resources.
+
+**Returns:** Future completing with the bone render context
+
+### fallbackContext
+
+```java
+default BoneRenderContext fallbackContext()
+```
+
+Returns a fallback bone render context used when the complete context cannot be resolved or is not yet available.
+
+**Returns:** Default `BoneRenderContext` for this source
+
+## Dummy Sources
+
+Location-based rendering without entity attachment.
+
+### BaseDummy
+
+```java
+record BaseDummy(@NotNull PlatformLocation location) implements Dummy
+```
+
+Basic dummy source with just a location.
+
+**Usage:**
+```java
+PlatformLocation location = world.getSpawnLocation();
+RenderSource.Dummy source = RenderSource.of(location);
+
+// Location is fixed
+PlatformLocation loc = source.location();
+
+// Context completes immediately with fallback
+CompletableFuture<BoneRenderContext> context = source.completeContext();
+```
+
+### ProfiledDummy
+
+```java
+record ProfiledDummy(
+    @NotNull PlatformLocation location,
+    @NotNull ModelProfile.Uncompleted profile
+) implements Dummy
+```
+
+Dummy source with a model profile for custom textures.
+
+**Usage:**
+```java
+PlatformLocation location = world.getSpawnLocation();
+ModelProfile.Uncompleted profile = ModelProfile.of("texture_data").asUncompleted();
+RenderSource.Dummy source = RenderSource.of(location, profile);
+
+// Context fetches skin asynchronously
+source.completeContext().thenAccept(context -> {
+    System.out.println("Skin loaded: " + context.skin());
+});
+```
+
+## Entity Sources
+
+Rendering attached to entity with automatic position tracking.
+
+### Entity Interface
+
+```java
+sealed interface Entity extends RenderSource<EntityTracker>
+```
+
+Base interface for entity-attached sources.
+
+#### entity
+
+```java
+@NotNull BaseEntity entity()
+```
+
+Returns the entity associated with this source.
+
+#### getOrCreate
+
+```java
+@NotNull EntityTracker getOrCreate(
+    @NotNull String name,
+    @NotNull Supplier<RenderPipeline> supplier,
+    @NotNull TrackerModifier modifier,
+    @NotNull Consumer<EntityTracker> preUpdateConsumer
+)
+```
+
+Gets or creates an entity tracker for this source.
+
+**Parameters:**
+- `name` - The name/identifier of the tracker
+- `supplier` - Supplier for creating the render pipeline
+- `modifier` - Tracker modifier
+- `preUpdateConsumer` - Pre-update callback
+
+**Returns:** Existing or newly created entity tracker
+
+### BaseEntity
+
+```java
+record BaseEntity(@NotNull kr.toxicity.model.api.entity.BaseEntity entity) implements Entity
+```
+
+Basic entity source without profile customization.
+
+**Usage:**
+```java
+BaseEntity baseEntity = BaseEntity.of(platformEntity);
+RenderSource.Entity source = RenderSource.of(baseEntity);
+
+// Location follows entity
+PlatformLocation loc = source.location();
+assert loc.equals(baseEntity.location());
+
+// Context is immediate
+source.completeContext().thenAccept(context -> {
+    // Use default entity context
+});
+```
+
+### ProfiledEntity
+
+```java
+record ProfiledEntity(
+    @NotNull kr.toxicity.model.api.entity.BaseEntity entity,
+    @NotNull ModelProfile.Uncompleted profile
+) implements Entity
+```
+
+Entity source with custom model profile.
+
+**Usage:**
+```java
+BaseEntity entity = BaseEntity.of(platformEntity);
+ModelProfile.Uncompleted profile = customProfile.asUncompleted();
+RenderSource.Entity source = RenderSource.of(entity, profile);
+
+// Fetches custom skin
+source.completeContext().thenAccept(context -> {
+    System.out.println("Custom skin applied");
+});
+```
+
+### BasePlayer
+
+```java
+record BasePlayer(@NotNull kr.toxicity.model.api.entity.BasePlayer entity) 
+    implements Entity, Profiled
+```
+
+Player-specific source implementing `Profiled` interface.
+
+**Additional Methods:**
+- `ModelProfile profile()` - Returns player's model profile
+- `PlayerArmor armors()` - Returns player's armor
+- `PlayerSkinParts skinParts()` - Returns visible skin parts
+
+**Usage:**
+```java
+BasePlayer basePlayer = (BasePlayer) BaseEntity.of(playerEntity);
+RenderSource.Entity source = RenderSource.of(basePlayer);
+
+// Access player-specific data
+if (source instanceof Profiled profiled) {
+    ModelProfile profile = profiled.profile();
+    PlayerArmor armor = profiled.armors();
+    PlayerSkinParts skinParts = profiled.skinParts();
+}
+
+// Context uses player's own skin
+source.completeContext().thenAccept(context -> {
+    // Rendered with player's skin
+});
+```
+
+### ProfiledPlayer
+
+```java
+record ProfiledPlayer(
+    @NotNull kr.toxicity.model.api.entity.BasePlayer entity,
+    @NotNull ModelProfile.Uncompleted externalProfile
+) implements Entity, Profiled
+```
+
+Player source with external profile override.
+
+**Usage:**
+```java
+BasePlayer player = (BasePlayer) BaseEntity.of(playerEntity);
+ModelProfile.Uncompleted customProfile = externalSkin.asUncompleted();
+RenderSource.Entity source = RenderSource.of(player, customProfile);
+
+// Uses external profile instead of player's skin
+source.completeContext().thenAccept(context -> {
+    System.out.println("Custom profile applied to player");
+});
+```
+
+## Profiled Interface
+
+Player sources implement this interface for additional data:
+
+```java
+interface Profiled {
+    @NotNull ModelProfile profile();
+    @NotNull PlayerArmor armors();
+    @NotNull PlayerSkinParts skinParts();
+}
+```
+
+## Usage Patterns
+
+### Creating Trackers from Source
+
+```java
+// Dummy tracker from location
+PlatformLocation location = player.location();
+RenderSource.Dummy dummySource = RenderSource.of(location);
+DummyTracker tracker = renderer.create(location);
+
+// Entity tracker from entity
+BaseEntity entity = BaseEntity.of(platformEntity);
+RenderSource.Entity entitySource = RenderSource.of(entity);
+EntityTracker tracker = renderer.create(entity);
+```
+
+### Working with Profiles
+
+```java
+// Create profile
+ModelProfile profile = ModelProfile.of("texture_base64");
+ModelProfile.Uncompleted uncompleted = profile.asUncompleted();
+
+// Use with dummy
+RenderSource.Dummy dummy = RenderSource.of(location, uncompleted);
+
+// Use with entity
+RenderSource.Entity entity = RenderSource.of(baseEntity, uncompleted);
+```
+
+### Async Context Loading
+
+```java
+RenderSource<?> source = RenderSource.of(location, profile);
+
+source.completeContext()
+    .thenAccept(context -> {
+        // Context ready with skin data
+        System.out.println("Render context loaded");
+    })
+    .exceptionally(ex -> {
+        // Handle error, use fallback
+        BoneRenderContext fallback = source.fallbackContext();
+        return null;
+    });
+```
+
+### Entity Tracker Management
+
+```java
+RenderSource.Entity source = RenderSource.of(entity);
+
+// Get or create tracker
+EntityTracker tracker = source.getOrCreate(
+    "main_model",
+    () -> new RenderPipeline(renderer, source, bones),
+    TrackerModifier.DEFAULT,
+    t -> {
+        // Pre-update logic
+    }
+);
+
+// Subsequent calls return same tracker
+EntityTracker sameTracker = source.getOrCreate(
+    "main_model",
+    () -> pipeline,
+    modifier,
+    consumer
+);
+assert tracker == sameTracker;
+```
+
+## Type Selection Logic
+
+The factory methods automatically select the appropriate implementation:
+
+```java
+// Non-player entity
+BaseEntity entity = BaseEntity.of(zombie);
+RenderSource.Entity source = RenderSource.of(entity);
+// Returns: RenderSource.BaseEntity
+
+// Player entity
+BaseEntity player = BaseEntity.of(playerEntity);
+RenderSource.Entity playerSource = RenderSource.of(player);
+// Returns: RenderSource.BasePlayer
+
+// With profile
+RenderSource.Entity profiled = RenderSource.of(entity, profile);
+// Returns: RenderSource.ProfiledEntity or ProfiledPlayer
+```
+
+## Complete Example
+
+```java
+// Example 1: Dummy with profile
+PlatformLocation spawnLoc = world.getSpawnLocation();
+ModelProfile profile = ModelProfile.of(customSkin);
+RenderSource.Dummy dummy = RenderSource.of(spawnLoc, profile.asUncompleted());
+
+dummy.completeContext().thenAccept(context -> {
+    ModelRenderer renderer = blueprint.renderer();
+    DummyTracker tracker = renderer.create(spawnLoc, profile);
+    System.out.println("Dummy created with custom skin");
+});
+
+// Example 2: Entity tracking
+BaseEntity npc = BaseEntity.of(platformNPC);
+RenderSource.Entity entitySource = RenderSource.of(npc);
+
+EntityTracker tracker = entitySource.getOrCreate(
+    "npc_model",
+    () -> {
+        RenderPipeline pipeline = new RenderPipeline(
+            renderer,
+            entitySource,
+            bones
+        );
+        return pipeline;
+    },
+    TrackerModifier.builder().autoPlay(true).build(),
+    t -> {
+        // Update logic
+        if (npc.isDead()) {
+            t.stop();
+        }
+    }
+);
+
+// Example 3: Player with custom skin
+BasePlayer player = (BasePlayer) BaseEntity.of(playerEntity);
+ModelProfile.Uncompleted customSkin = getCustomSkin(player);
+RenderSource.Entity playerSource = RenderSource.of(player, customSkin);
+
+if (playerSource instanceof Profiled profiled) {
+    PlayerArmor armor = profiled.armors();
+    PlayerSkinParts parts = profiled.skinParts();
+    
+    // Create tracker with player data
+    EntityTracker playerTracker = renderer.create(player, customSkin);
+}
+```
+
+## See Also
+
+- [ModelRenderer](/api/model-renderer) - Uses sources to create trackers
+- [RenderPipeline](/api/render-pipeline) - Created from render sources
+- [Tracker](/api/tracker) - Created by render sources
+- [ModelProfile](/api/model-profile) - Profile data used by sources

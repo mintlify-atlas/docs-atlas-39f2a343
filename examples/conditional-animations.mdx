@@ -1,0 +1,619 @@
+---
+title: Conditional Animations
+description: Implement state-based animation systems with conditions and transitions
+icon: code-branch
+---
+
+Learn how to create sophisticated animation systems that respond to game state, player actions, and custom conditions.
+
+## Overview
+
+Conditional animations allow you to:
+- Create state machines for entity behavior
+- Transition between animations based on conditions
+- Use predicates to control animation playback
+- Build reactive animation systems
+
+## Animation State Machine
+
+### Basic State System
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.animation.AnimationModifier;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import org.bukkit.entity.LivingEntity;
+
+import java.util.function.BooleanSupplier;
+
+public class AnimationStateMachine {
+    
+    private final EntityTracker tracker;
+    private final LivingEntity entity;
+    private AnimationState currentState = AnimationState.IDLE;
+    
+    public AnimationStateMachine(EntityTracker tracker, LivingEntity entity) {
+        this.tracker = tracker;
+        this.entity = entity;
+        setupStateMachine();
+    }
+    
+    private void setupStateMachine() {
+        // Check state every tick
+        tracker.tick((t, bundler) -> {
+            AnimationState newState = determineState();
+            
+            if (newState != currentState) {
+                transitionTo(newState);
+            }
+        });
+    }
+    
+    private AnimationState determineState() {
+        // Priority-based state determination
+        if (entity.isDead()) return AnimationState.DEATH;
+        if (entity.getHealth() < entity.getMaxHealth() * 0.3) return AnimationState.HURT;
+        if (entity.getVelocity().lengthSquared() > 0.01) return AnimationState.WALKING;
+        if (entity.isInWater()) return AnimationState.SWIMMING;
+        
+        return AnimationState.IDLE;
+    }
+    
+    private void transitionTo(AnimationState newState) {
+        // Stop current animation
+        tracker.stopAnimation(currentState.getAnimation());
+        
+        // Play new animation
+        tracker.animate(
+            newState.getAnimation(),
+            newState.getModifier()
+        );
+        
+        currentState = newState;
+    }
+    
+    public enum AnimationState {
+        IDLE("idle", AnimationModifier.DEFAULT),
+        WALKING("walk", AnimationModifier.DEFAULT),
+        RUNNING("run", AnimationModifier.builder().speed(1.5F).build()),
+        HURT("hurt", AnimationModifier.builder().speed(0.8F).build()),
+        SWIMMING("swim", AnimationModifier.DEFAULT),
+        DEATH("death", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+        
+        private final String animation;
+        private final AnimationModifier modifier;
+        
+        AnimationState(String animation, AnimationModifier modifier) {
+            this.animation = animation;
+            this.modifier = modifier;
+        }
+        
+        public String getAnimation() { return animation; }
+        public AnimationModifier getModifier() { return modifier; }
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.animation.AnimationModifier
+import kr.toxicity.model.api.tracker.EntityTracker
+import org.bukkit.entity.LivingEntity
+
+class AnimationStateMachine(
+    private val tracker: EntityTracker,
+    private val entity: LivingEntity
+) {
+    private var currentState = AnimationState.IDLE
+    
+    init {
+        setupStateMachine()
+    }
+    
+    private fun setupStateMachine() {
+        tracker.tick { _, _ ->
+            val newState = determineState()
+            
+            if (newState != currentState) {
+                transitionTo(newState)
+            }
+        }
+    }
+    
+    private fun determineState(): AnimationState {
+        return when {
+            entity.isDead -> AnimationState.DEATH
+            entity.health < entity.maxHealth * 0.3 -> AnimationState.HURT
+            entity.velocity.lengthSquared() > 0.01 -> AnimationState.WALKING
+            entity.isInWater -> AnimationState.SWIMMING
+            else -> AnimationState.IDLE
+        }
+    }
+    
+    private fun transitionTo(newState: AnimationState) {
+        tracker.stopAnimation(currentState.animation)
+        tracker.animate(newState.animation, newState.modifier)
+        currentState = newState
+    }
+    
+    enum class AnimationState(
+        val animation: String,
+        val modifier: AnimationModifier
+    ) {
+        IDLE("idle", AnimationModifier.DEFAULT),
+        WALKING("walk", AnimationModifier.DEFAULT),
+        RUNNING("run", AnimationModifier.builder().speed(1.5F).build()),
+        HURT("hurt", AnimationModifier.builder().speed(0.8F).build()),
+        SWIMMING("swim", AnimationModifier.DEFAULT),
+        DEATH("death", AnimationModifier.DEFAULT_WITH_PLAY_ONCE)
+    }
+}
+```
+</CodeGroup>
+
+## Predicate-Based Animations
+
+### Using Animation Predicates
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.animation.AnimationModifier;
+import kr.toxicity.model.api.tracker.Tracker;
+import org.bukkit.entity.LivingEntity;
+
+import java.util.function.BooleanSupplier;
+
+public class ConditionalAnimations {
+    
+    public void setupConditionalAnimation(Tracker tracker, LivingEntity entity) {
+        // Play animation only when entity has potion effect
+        BooleanSupplier hasPotionEffect = () -> 
+            entity.getActivePotionEffects().size() > 0;
+        
+        tracker.animate("potion_effect", AnimationModifier.builder()
+            .predicate(hasPotionEffect)
+            .start(5)
+            .end(5)
+            .build()
+        );
+    }
+    
+    public void setupHealthBasedAnimation(Tracker tracker, LivingEntity entity) {
+        // Different animations based on health percentage
+        tracker.tick((t, bundler) -> {
+            double healthPercent = entity.getHealth() / entity.getMaxHealth();
+            
+            if (healthPercent > 0.75) {
+                // Healthy - play normal idle
+                t.animate("idle");
+            } else if (healthPercent > 0.5) {
+                // Slightly damaged - slower animation
+                t.animate("idle", AnimationModifier.builder()
+                    .speed(0.9F)
+                    .build()
+                );
+            } else if (healthPercent > 0.25) {
+                // Damaged - play hurt idle
+                t.animate("idle_hurt");
+            } else {
+                // Critical - play critical animation
+                t.animate("idle_critical", AnimationModifier.builder()
+                    .speed(1.2F)
+                    .build()
+                );
+            }
+        });
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.animation.AnimationModifier
+import kr.toxicity.model.api.tracker.Tracker
+import org.bukkit.entity.LivingEntity
+
+class ConditionalAnimations {
+    
+    fun setupConditionalAnimation(tracker: Tracker, entity: LivingEntity) {
+        val hasPotionEffect = { entity.activePotionEffects.isNotEmpty() }
+        
+        tracker.animate("potion_effect", AnimationModifier.builder()
+            .predicate(hasPotionEffect)
+            .start(5)
+            .end(5)
+            .build()
+        )
+    }
+    
+    fun setupHealthBasedAnimation(tracker: Tracker, entity: LivingEntity) {
+        tracker.tick { t, _ ->
+            val healthPercent = entity.health / entity.maxHealth
+            
+            when {
+                healthPercent > 0.75 -> t.animate("idle")
+                healthPercent > 0.5 -> t.animate("idle", AnimationModifier.builder()
+                    .speed(0.9F)
+                    .build()
+                )
+                healthPercent > 0.25 -> t.animate("idle_hurt")
+                else -> t.animate("idle_critical", AnimationModifier.builder()
+                    .speed(1.2F)
+                    .build()
+                )
+            }
+        }
+    }
+}
+```
+</CodeGroup>
+
+## Animation Layering
+
+### Multiple Animation Layers
+
+```java
+import kr.toxicity.model.api.util.function.BonePredicate;
+import kr.toxicity.model.api.animation.AnimationModifier;
+
+public class AnimationLayers {
+    
+    public void setupLayeredAnimations(EntityTracker tracker, LivingEntity entity) {
+        // Base layer - body animations
+        tracker.animate("idle");
+        
+        // Upper body layer - attack animations
+        tracker.tick((t, bundler) -> {
+            if (entity.getAttackCooldown() == 1.0F) {
+                // Play attack only on upper body bones
+                t.animate("attack_upper", AnimationModifier.builder()
+                    .type(AnimationIterator.Type.PLAY_ONCE)
+                    .build()
+                );
+            }
+        });
+        
+        // Head layer - look around
+        tracker.tick(20, (t, bundler) -> {
+            if (Math.random() < 0.3) {
+                t.animate("look_around", AnimationModifier.builder()
+                    .type(AnimationIterator.Type.PLAY_ONCE)
+                    .build()
+                );
+            }
+        });
+    }
+}
+```
+
+## Per-Player Animations
+
+### Player-Specific Animation States
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.animation.AnimationModifier;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import org.bukkit.entity.Player;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class PerPlayerAnimations {
+    
+    private final Map<UUID, AnimationState> playerStates = new ConcurrentHashMap<>();
+    
+    public void setupPerPlayerAnimation(EntityTracker tracker, Player player) {
+        UUID playerId = player.getUniqueId();
+        
+        // Different animation based on player relationship
+        tracker.tick((t, bundler) -> {
+            AnimationState state = determineStateForPlayer(player);
+            AnimationState currentState = playerStates.get(playerId);
+            
+            if (state != currentState) {
+                playerStates.put(playerId, state);
+                
+                // Play per-player animation
+                t.animate(state.getAnimation(), AnimationModifier.builder()
+                    .player(player)
+                    .build()
+                );
+            }
+        });
+    }
+    
+    private AnimationState determineStateForPlayer(Player player) {
+        // Example: Different animation based on player team
+        if (isTeammate(player)) {
+            return AnimationState.FRIENDLY;
+        } else if (isEnemy(player)) {
+            return AnimationState.HOSTILE;
+        }
+        return AnimationState.NEUTRAL;
+    }
+    
+    private boolean isTeammate(Player player) {
+        // Your team check logic
+        return false;
+    }
+    
+    private boolean isEnemy(Player player) {
+        // Your enemy check logic
+        return false;
+    }
+    
+    enum AnimationState {
+        FRIENDLY("wave"),
+        NEUTRAL("idle"),
+        HOSTILE("aggressive");
+        
+        private final String animation;
+        
+        AnimationState(String animation) {
+            this.animation = animation;
+        }
+        
+        public String getAnimation() {
+            return animation;
+        }
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.animation.AnimationModifier
+import kr.toxicity.model.api.tracker.EntityTracker
+import org.bukkit.entity.Player
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+class PerPlayerAnimations {
+    
+    private val playerStates = ConcurrentHashMap<UUID, AnimationState>()
+    
+    fun setupPerPlayerAnimation(tracker: EntityTracker, player: Player) {
+        val playerId = player.uniqueId
+        
+        tracker.tick { t, _ ->
+            val state = determineStateForPlayer(player)
+            val currentState = playerStates[playerId]
+            
+            if (state != currentState) {
+                playerStates[playerId] = state
+                
+                t.animate(state.animation, AnimationModifier.builder()
+                    .player(player)
+                    .build()
+                )
+            }
+        }
+    }
+    
+    private fun determineStateForPlayer(player: Player): AnimationState {
+        return when {
+            isTeammate(player) -> AnimationState.FRIENDLY
+            isEnemy(player) -> AnimationState.HOSTILE
+            else -> AnimationState.NEUTRAL
+        }
+    }
+    
+    private fun isTeammate(player: Player) = false
+    private fun isEnemy(player: Player) = false
+    
+    enum class AnimationState(val animation: String) {
+        FRIENDLY("wave"),
+        NEUTRAL("idle"),
+        HOSTILE("aggressive")
+    }
+}
+```
+</CodeGroup>
+
+## Time-Based Animations
+
+### Day/Night Cycle Animations
+
+```java
+import org.bukkit.World;
+
+public class TimeBasedAnimations {
+    
+    public void setupDayNightAnimations(EntityTracker tracker, World world) {
+        tracker.tick(20, (t, bundler) -> {
+            long time = world.getTime();
+            
+            if (time >= 0 && time < 12000) {
+                // Day - active animation
+                t.animate("active");
+            } else if (time >= 12000 && time < 13000) {
+                // Sunset - transition
+                t.animate("sleep_transition", AnimationModifier.builder()
+                    .type(AnimationIterator.Type.PLAY_ONCE)
+                    .build(),
+                    () -> t.animate("sleeping")
+                );
+            } else {
+                // Night - sleeping
+                t.animate("sleeping");
+            }
+        });
+    }
+}
+```
+
+## Combat State Animations
+
+### Advanced Combat System
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.animation.AnimationModifier;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+public class CombatAnimations {
+    
+    private final Map<UUID, CombatState> combatStates = new HashMap<>();
+    private final Map<UUID, Long> lastDamageTime = new HashMap<>();
+    
+    public void setupCombatAnimations(EntityTracker tracker, LivingEntity entity) {
+        tracker.tick((t, bundler) -> {
+            UUID entityId = entity.getUniqueId();
+            long currentTime = System.currentTimeMillis();
+            
+            // Check if entity was recently damaged
+            Long lastDamage = lastDamageTime.get(entityId);
+            boolean inCombat = lastDamage != null && 
+                (currentTime - lastDamage) < 5000; // 5 second combat timer
+            
+            CombatState state = determineComba tState(entity, inCombat);
+            CombatState currentState = combatStates.get(entityId);
+            
+            if (state != currentState) {
+                combatStates.put(entityId, state);
+                playCombatAnimation(t, state);
+            }
+        });
+    }
+    
+    private CombatState determineCombatState(LivingEntity entity, boolean inCombat) {
+        if (!inCombat) return CombatState.IDLE;
+        
+        double healthPercent = entity.getHealth() / entity.getMaxHealth();
+        
+        if (healthPercent < 0.3) {
+            return CombatState.DEFENSIVE;
+        } else if (entity.getAttackCooldown() > 0.8F) {
+            return CombatState.ATTACKING;
+        } else {
+            return CombatState.COMBAT_READY;
+        }
+    }
+    
+    private void playCombatAnimation(EntityTracker tracker, CombatState state) {
+        switch (state) {
+            case IDLE -> tracker.animate("idle");
+            case COMBAT_READY -> tracker.animate("combat_idle");
+            case ATTACKING -> tracker.animate("attack", AnimationModifier.builder()
+                .type(AnimationIterator.Type.PLAY_ONCE)
+                .build()
+            );
+            case DEFENSIVE -> tracker.animate("defend");
+        }
+    }
+    
+    public void onEntityDamaged(UUID entityId) {
+        lastDamageTime.put(entityId, System.currentTimeMillis());
+    }
+    
+    enum CombatState {
+        IDLE,
+        COMBAT_READY,
+        ATTACKING,
+        DEFENSIVE
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.animation.AnimationModifier
+import kr.toxicity.model.api.tracker.EntityTracker
+import org.bukkit.entity.LivingEntity
+import java.util.UUID
+
+class CombatAnimations {
+    
+    private val combatStates = HashMap<UUID, CombatState>()
+    private val lastDamageTime = HashMap<UUID, Long>()
+    
+    fun setupCombatAnimations(tracker: EntityTracker, entity: LivingEntity) {
+        tracker.tick { t, _ ->
+            val entityId = entity.uniqueId
+            val currentTime = System.currentTimeMillis()
+            
+            val lastDamage = lastDamageTime[entityId]
+            val inCombat = lastDamage != null && (currentTime - lastDamage) < 5000
+            
+            val state = determineCombatState(entity, inCombat)
+            val currentState = combatStates[entityId]
+            
+            if (state != currentState) {
+                combatStates[entityId] = state
+                playCombatAnimation(t, state)
+            }
+        }
+    }
+    
+    private fun determineCombatState(entity: LivingEntity, inCombat: Boolean): CombatState {
+        if (!inCombat) return CombatState.IDLE
+        
+        val healthPercent = entity.health / entity.maxHealth
+        
+        return when {
+            healthPercent < 0.3 -> CombatState.DEFENSIVE
+            entity.attackCooldown > 0.8F -> CombatState.ATTACKING
+            else -> CombatState.COMBAT_READY
+        }
+    }
+    
+    private fun playCombatAnimation(tracker: EntityTracker, state: CombatState) {
+        when (state) {
+            CombatState.IDLE -> tracker.animate("idle")
+            CombatState.COMBAT_READY -> tracker.animate("combat_idle")
+            CombatState.ATTACKING -> tracker.animate("attack", AnimationModifier.builder()
+                .type(AnimationIterator.Type.PLAY_ONCE)
+                .build()
+            )
+            CombatState.DEFENSIVE -> tracker.animate("defend")
+        }
+    }
+    
+    fun onEntityDamaged(entityId: UUID) {
+        lastDamageTime[entityId] = System.currentTimeMillis()
+    }
+    
+    enum class CombatState {
+        IDLE, COMBAT_READY, ATTACKING, DEFENSIVE
+    }
+}
+```
+</CodeGroup>
+
+## Best Practices
+
+<Tip>
+  - Use state machines for complex animation logic
+  - Implement smooth transitions between animations with lerp times
+  - Cache animation states to avoid redundant updates
+  - Use predicates for animations that should play conditionally
+  - Combine multiple conditions with priority-based logic
+</Tip>
+
+<Warning>
+  - Avoid changing animations every tick - use throttling
+  - Don't create circular animation dependencies
+  - Test state transitions thoroughly
+  - Monitor performance with complex state systems
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Events" icon="bolt" href="/examples/custom-events">
+    Trigger animations from custom events
+  </Card>
+  <Card title="Dynamic Boss" icon="dragon" href="/examples/dynamic-boss">
+    Apply state machines to boss entities
+  </Card>
+  <Card title="Performance Optimization" icon="gauge-high" href="/examples/performance-optimization">
+    Optimize animation systems
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/animation-modifier">
+    AnimationModifier API documentation
+  </Card>
+</CardGroup>

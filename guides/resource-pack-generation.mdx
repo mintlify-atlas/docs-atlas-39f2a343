@@ -1,0 +1,466 @@
+---
+title: Resource Pack Generation
+description: How BetterModel automatically generates and serves resource packs
+icon: box
+---
+
+## Overview
+
+BetterModel **automatically generates resource packs** from your BlockBench models, including all necessary textures, model files, and metadata. This guide explains how the system works and how to customize it.
+
+## Automatic Generation
+
+### How It Works
+
+When BetterModel loads:
+
+1. **Scans models**: Reads all `.bbmodel` files from `models/` and `players/`
+2. **Extracts assets**: Pulls textures, geometries, and animations
+3. **Generates pack**: Creates a complete resource pack structure
+4. **Builds pack file**: Zips everything into a `.zip` file
+5. **Serves pack**: Hosts the pack for players to download
+
+<Note>
+The resource pack is regenerated on every plugin reload or server restart. Changes to models require a reload to take effect.
+</Note>
+
+## Pack Structure
+
+BetterModel generates a standard Minecraft resource pack:
+
+```
+BetterModel-Pack.zip
+├── pack.mcmeta
+├── pack.png (optional)
+└── assets/
+    └── bettermodel/
+        ├── models/
+        │   └── item/
+        │       ├── demon_knight_head.json
+        │       ├── demon_knight_body.json
+        │       └── ...
+        └── textures/
+            ├── demon_knight_texture.png
+            └── ...
+```
+
+### Pack Metadata
+
+The `pack.mcmeta` file is automatically generated:
+
+```json
+{
+  "pack": {
+    "pack_format": 48,
+    "description": "BetterModel auto-generated resource pack"
+  }
+}
+```
+
+The pack format is automatically adjusted based on your Minecraft version.
+
+## Pack Distribution
+
+### Built-in Server
+
+BetterModel includes a built-in HTTP server to distribute packs:
+
+```yaml
+# config.yml
+resource-pack:
+  enabled: true
+  port: 8080
+  host: "0.0.0.0"
+```
+
+Players automatically download the pack when joining.
+
+### External Hosting
+
+For production servers, host the pack externally:
+
+<Steps>
+
+### Generate the pack
+
+Run `/bettermodel reload` to generate the pack
+
+### Locate the pack file
+
+Find it at `plugins/BetterModel/pack/BetterModel-Pack.zip`
+
+### Upload to hosting
+
+Upload to:
+- GitHub Releases (recommended)
+- Dropbox (public link)
+- Google Drive (public link)
+- Your own web server
+- MC-Packs.net
+
+### Configure server
+
+In `server.properties`:
+
+```properties
+resource-pack=https://example.com/BetterModel-Pack.zip
+resource-pack-sha1=<hash>
+require-resource-pack=true
+```
+
+</Steps>
+
+<Warning>
+If using a public file host, ensure the direct download link is used, not a preview page.
+</Warning>
+
+## Pack Builder API
+
+### Understanding PackBuilder
+
+The `PackBuilder` class lets you add custom resources:
+
+```java
+import kr.toxicity.model.api.pack.PackBuilder;
+import kr.toxicity.model.api.BetterModel;
+
+// Access during pack generation
+PackBuilder builder = // obtained during pack build
+```
+
+### Adding Custom Resources
+
+Add custom files to the pack:
+
+```java
+import kr.toxicity.model.api.pack.PackBuilder;
+
+PackBuilder builder = // your pack builder
+
+// Add a custom texture
+builder.resolve("textures", "custom")
+    .add("my_texture.png", () -> readTextureBytes());
+
+// Add a custom model
+builder.resolve("models", "item")
+    .add("custom_item.json", () -> generateModelJson());
+
+// Add with estimated size (for optimization)
+builder.add("custom_file.png", 4096, () -> readFileBytes());
+```
+
+### Pack Path Resolution
+
+Navigate pack paths:
+
+```java
+// Resolve nested paths
+PackBuilder itemModels = builder.resolve("models", "item");
+PackBuilder textures = builder.resolve("textures", "entity");
+
+// Add resources at resolved paths
+itemModels.add("sword.json", () -> swordModel);
+textures.add("dragon.png", () -> dragonTexture);
+```
+
+### Resource Obfuscation
+
+BetterModel includes name obfuscation to prevent conflicts:
+
+```java
+import kr.toxicity.model.api.pack.PackObfuscator;
+
+PackObfuscator obfuscator = builder.obfuscator();
+
+// Generate obfuscated names
+String obfuscatedName = obfuscator.next(); // "a", "b", "c", ...
+```
+
+<Note>
+Obfuscation prevents namespace conflicts when multiple plugins add resources to the pack.
+</Note>
+
+## Pack Events
+
+### Pack Build Events
+
+Listen for pack generation:
+
+```java
+import kr.toxicity.model.api.event.pack.*;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+
+public class PackListener implements Listener {
+    
+    @EventHandler
+    public void onPackBuild(PackBuildEvent event) {
+        PackBuilder builder = event.builder();
+        
+        // Add custom resources
+        builder.resolve("models", "custom")
+            .add("my_model.json", () -> generateModel());
+        
+        System.out.println("Custom resources added to pack");
+    }
+}
+```
+
+## Advanced Customization
+
+### Custom Pack Icon
+
+Add a custom `pack.png`:
+
+```java
+@EventHandler
+public void onPackBuild(PackBuildEvent event) {
+    PackBuilder builder = event.builder();
+    
+    // Add pack icon
+    builder.add("pack.png", () -> {
+        try {
+            return Files.readAllBytes(Path.of("plugins/BetterModel/pack_icon.png"));
+        } catch (IOException e) {
+            return new byte[0];
+        }
+    });
+}
+```
+
+### Custom Pack Metadata
+
+Modify `pack.mcmeta`:
+
+```java
+import kr.toxicity.model.api.pack.PackMeta;
+import com.google.gson.JsonObject;
+
+@EventHandler
+public void onPackBuild(PackBuildEvent event) {
+    PackBuilder builder = event.builder();
+    
+    // Create custom metadata
+    JsonObject packMeta = new JsonObject();
+    JsonObject pack = new JsonObject();
+    pack.addProperty("pack_format", 48);
+    pack.addProperty("description", "My Custom Pack");
+    packMeta.add("pack", pack);
+    
+    // Add to pack
+    builder.add("pack.mcmeta", () -> 
+        packMeta.toString().getBytes()
+    );
+}
+```
+
+### Multiple Namespaces
+
+Organize resources under multiple namespaces:
+
+```java
+// BetterModel namespace
+builder.resolve("assets", "bettermodel", "models")
+    .add("model1.json", () -> model1Data);
+
+// Custom namespace
+builder.resolve("assets", "myplugin", "models")
+    .add("model2.json", () -> model2Data);
+```
+
+## Pack Overlays
+
+BetterModel supports version-specific overlays:
+
+```java
+import kr.toxicity.model.api.pack.PackOverlay;
+
+// Pack overlays allow version-specific resources
+// This is handled automatically by BetterModel
+```
+
+## Performance Optimization
+
+### Pack Size
+
+Keep pack size reasonable:
+
+- **Texture resolution**: Use 512x512 or lower
+- **Model complexity**: Optimize polygon count
+- **Animation data**: Remove unused keyframes
+- **Compression**: BetterModel automatically compresses
+
+<Warning>
+Large resource packs (>50MB) can cause:
+- Long download times
+- Client lag during loading
+- Memory issues on low-end clients
+</Warning>
+
+### Pack Caching
+
+BetterModel caches pack data:
+
+- **Pack hash**: Generated once per reload
+- **Resource data**: Loaded on-demand
+- **Texture processing**: Cached after first access
+
+### Async Pack Building
+
+Pack generation is asynchronous:
+
+```java
+// Pack builds in background thread
+// Server continues running normally
+// Players can join during pack generation
+```
+
+## Pack Configuration
+
+### Server Configuration
+
+```yaml
+# config.yml
+resource-pack:
+  # Enable automatic pack generation
+  enabled: true
+  
+  # HTTP server settings
+  server:
+    enabled: true
+    port: 8080
+    host: "0.0.0.0"
+  
+  # Pack metadata
+  description: "BetterModel Resource Pack"
+  
+  # Require pack
+  required: true
+  
+  # Custom pack URL (overrides built-in server)
+  url: ""
+  
+  # SHA-1 hash (auto-generated if empty)
+  sha1: ""
+```
+
+### Client-Side Requirements
+
+Players must have:
+
+- Resource packs enabled
+- Sufficient memory (for large packs)
+- Network connection to download
+
+## Troubleshooting
+
+### Pack Not Loading
+
+**Symptoms**: Players don't see models
+
+**Solutions**:
+1. Check server logs for pack generation errors
+2. Verify pack file exists: `plugins/BetterModel/pack/`
+3. Test pack download URL manually
+4. Check firewall settings for HTTP server
+5. Verify `server.properties` settings
+
+### Textures Missing
+
+**Symptoms**: Models appear with missing textures
+
+**Solutions**:
+1. Ensure textures are in the same directory as `.bbmodel`
+2. Check texture paths in BlockBench
+3. Verify texture files are valid PNG format
+4. Reload the plugin to regenerate pack
+
+### Pack Size Too Large
+
+**Symptoms**: Slow downloads, client lag
+
+**Solutions**:
+1. Reduce texture resolution
+2. Optimize model complexity
+3. Remove unused animations
+4. Use external hosting with CDN
+5. Split models across multiple plugins
+
+### Version Mismatch
+
+**Symptoms**: "Incompatible pack" error
+
+**Solutions**:
+1. Check Minecraft version compatibility
+2. Verify `pack_format` in `pack.mcmeta`
+3. Update BetterModel to latest version
+4. Use pack overlays for multi-version support
+
+## Manual Pack Management
+
+### Extracting the Pack
+
+```bash
+cd plugins/BetterModel/pack
+unzip BetterModel-Pack.zip -d extracted/
+```
+
+### Modifying the Pack
+
+1. Extract the pack
+2. Make changes to files
+3. Re-zip the pack
+4. Update server.properties with new URL/hash
+
+### Testing Pack Changes
+
+```bash
+# Generate SHA-1 hash
+sha1sum BetterModel-Pack.zip
+
+# Update server.properties
+resource-pack-sha1=<new-hash>
+
+# Restart or reload
+```
+
+## Best Practices
+
+<Note>
+**Production Recommendations:**
+- Host packs externally for better performance
+- Use CDN for global distribution
+- Version your pack files
+- Keep pack size under 20MB when possible
+- Test packs on different client versions
+- Monitor pack download success rate
+</Note>
+
+### Development Workflow
+
+1. Create model in BlockBench
+2. Export to `plugins/BetterModel/models/`
+3. Run `/bettermodel reload`
+4. Test in-game
+5. Iterate on model/textures
+6. Export final pack for production
+
+### Version Control
+
+```bash
+# Track generated packs
+git add plugins/BetterModel/pack/BetterModel-Pack.zip
+git commit -m "Update resource pack v1.2.3"
+git tag pack-v1.2.3
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="code" href="/api/bettermodel">
+    Explore the complete API
+  </Card>
+  <Card title="Installation" icon="gear" href="/installation">
+    Install and configure BetterModel
+  </Card>
+</CardGroup>

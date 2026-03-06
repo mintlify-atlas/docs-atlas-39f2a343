@@ -1,0 +1,378 @@
+---
+title: Spawning Entities
+description: Create EntityTracker instances and bind models to entities
+icon: wand-magic-sparkles
+---
+
+## Overview
+
+EntityTrackers are the core controller for model instances in BetterModel. They manage the lifecycle, rendering, animation, and player interaction of a model attached to an entity.
+
+## Understanding Trackers
+
+BetterModel provides three types of trackers:
+
+- **EntityTracker**: Attached to a living entity, synchronizes position and rotation
+- **PlayerTracker**: Specialized for player entities with player-mode body rotation
+- **DummyTracker**: Standalone models at fixed locations, not bound to any entity
+
+## Creating Entity Trackers
+
+### Basic Entity Tracker
+
+Create a tracker attached to an entity:
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import org.bukkit.entity.Entity;
+
+Entity entity = // your entity
+
+// Get or create a tracker
+EntityTracker tracker = BetterModel.model("demon_knight")
+    .map(r -> r.getOrCreate(BukkitAdapter.adapt(entity)))
+    .orElse(null);
+
+if (tracker != null) {
+    // Model is now attached to the entity
+    System.out.println("Model spawned: " + tracker.name());
+}
+```
+
+<Note>
+**`getOrCreate()`** returns an existing tracker if the entity already has this model attached, preventing duplicates.
+</Note>
+
+### Creating with Custom Modifier
+
+Use `TrackerModifier` to customize behavior:
+
+```java
+import kr.toxicity.model.api.tracker.TrackerModifier;
+
+TrackerModifier modifier = TrackerModifier.builder()
+    .sightTrace(true)        // Only show when player can see it
+    .damageAnimation(true)   // Play damage animation when hit
+    .damageTint(true)        // Apply red tint when damaged
+    .build();
+
+EntityTracker tracker = BetterModel.model("demon_knight")
+    .map(r -> r.create(BukkitAdapter.adapt(entity), modifier))
+    .orElse(null);
+```
+
+### Pre-spawn Configuration
+
+Configure the tracker before it spawns to players:
+
+```java
+EntityTracker tracker = BetterModel.model("demon_knight")
+    .map(r -> r.create(
+        BukkitAdapter.adapt(entity),
+        TrackerModifier.DEFAULT,
+        t -> {
+            // Pre-spawn configuration
+            t.update(TrackerUpdateAction.tint(0x0026FF));  // Blue tint
+            t.update(TrackerUpdateAction.brightness(15, 15)); // Full bright
+            t.animate("idle"); // Start with idle animation
+        }
+    ))
+    .orElse(null);
+```
+
+## Creating Dummy Trackers
+
+DummyTrackers are perfect for stationary models, decorations, or custom NPCs:
+
+```java
+import kr.toxicity.model.api.tracker.DummyTracker;
+import org.bukkit.Location;
+
+Location location = // your location
+
+DummyTracker tracker = BetterModel.model("statue")
+    .map(r -> r.create(BukkitAdapter.adapt(location)))
+    .orElse(null);
+
+if (tracker != null) {
+    tracker.animate("idle");
+}
+```
+
+### Dummy Tracker with Player Skin
+
+Create a dummy tracker using a player's skin:
+
+```java
+import kr.toxicity.model.api.profile.ModelProfile;
+import org.bukkit.entity.Player;
+
+Player player = // your player
+Location location = // display location
+
+DummyTracker tracker = BetterModel.limb("steve")
+    .map(r -> r.create(
+        BukkitAdapter.adapt(location),
+        ModelProfile.of(BukkitAdapter.adapt(player))
+    ))
+    .orElse(null);
+```
+
+### Moving Dummy Trackers
+
+Update the location of a dummy tracker:
+
+```java
+DummyTracker tracker = // your dummy tracker
+Location newLocation = // new location
+
+tracker.location(BukkitAdapter.adapt(newLocation));
+```
+
+## Working with the Registry
+
+### Retrieving Existing Trackers
+
+Get a tracker for an entity that already has a model:
+
+```java
+import kr.toxicity.model.api.tracker.EntityTrackerRegistry;
+import java.util.Optional;
+
+Entity entity = // your entity
+
+Optional<EntityTrackerRegistry> registry = BetterModel.registry(entity.getUniqueId());
+registry.ifPresent(reg -> {
+    EntityTracker tracker = reg.tracker("demon_knight");
+    if (tracker != null) {
+        tracker.animate("attack");
+    }
+});
+```
+
+### Listing All Trackers for an Entity
+
+```java
+BetterModel.registry(entity.getUniqueId()).ifPresent(registry -> {
+    registry.trackers().forEach((name, tracker) -> {
+        System.out.println("Model: " + name);
+        System.out.println("Players viewing: " + tracker.playerCount());
+    });
+});
+```
+
+## Managing Tracker Lifecycle
+
+### Spawning to Specific Players
+
+Control which players can see the model:
+
+```java
+import kr.toxicity.model.api.platform.PlatformPlayer;
+
+EntityTracker tracker = // your tracker
+PlatformPlayer player = BukkitAdapter.adapt(bukkitPlayer);
+
+// Show to player
+tracker.show(player);
+
+// Hide from player
+tracker.hide(player);
+
+// Check if visible to player
+boolean isVisible = !tracker.isHide(player);
+```
+
+### Mark for Spawn
+
+Control which players the model spawns for:
+
+```java
+EntityTracker tracker = // your tracker
+
+// Only spawn for specific players
+tracker.markPlayerForSpawn(BukkitAdapter.adapt(player1));
+tracker.markPlayerForSpawn(BukkitAdapter.adapt(player2));
+
+// Check if can spawn for player
+boolean canSpawn = tracker.canBeSpawnedAt(BukkitAdapter.adapt(player));
+```
+
+### Pausing and Resuming
+
+Pause tracker updates temporarily:
+
+```java
+// Pause animations and updates
+tracker.pause(true);
+
+// Resume
+tracker.pause(false);
+```
+
+### Closing Trackers
+
+Properly close a tracker when you're done:
+
+```java
+// Despawn the model (can be respawned)
+tracker.despawn();
+
+// Completely close and remove the tracker
+tracker.close();
+
+// Check if closed
+if (tracker.isClosed()) {
+    System.out.println("Tracker is closed");
+}
+```
+
+## Advanced Features
+
+### Custom Scaling
+
+```java
+import kr.toxicity.model.api.tracker.ModelScaler;
+
+tracker.scaler(ModelScaler.of(2.0F)); // Double size
+tracker.forceUpdate(true); // Apply immediately
+```
+
+### Custom Rotation
+
+```java
+import kr.toxicity.model.api.tracker.ModelRotator;
+import kr.toxicity.model.api.tracker.ModelRotation;
+
+// Fixed rotation
+tracker.rotation(() -> new ModelRotation(0F, 90F)); // Face east
+
+// Dynamic rotation based on entity
+tracker.rotator(ModelRotator.YAW); // Follow entity yaw only
+tracker.rotator(ModelRotator.PITCH_AND_YAW); // Follow both
+```
+
+### Close Event Handling
+
+Listen for when a tracker closes:
+
+```java
+tracker.handleCloseEvent((t, reason) -> {
+    System.out.println("Tracker closed: " + reason);
+    
+    switch (reason) {
+        case REMOVE -> System.out.println("Manually removed");
+        case DESPAWN -> System.out.println("Entity despawned");
+        case PLUGIN_DISABLE -> System.out.println("Plugin disabled");
+    }
+});
+```
+
+### Per-Tick Tasks
+
+Run code every tracker tick (25ms):
+
+```java
+tracker.frame((t, bundlerSet) -> {
+    // Runs every 25ms
+    // Fast operations only!
+});
+
+tracker.tick((t, bundlerSet) -> {
+    // Runs every Minecraft tick (50ms)
+    // Use for regular updates
+});
+
+tracker.tick(20, (t, bundlerSet) -> {
+    // Runs every 20 Minecraft ticks (1 second)
+});
+```
+
+## Player-Specific Models
+
+### Creating Player Trackers
+
+Player trackers automatically handle player-specific body rotation:
+
+```java
+import org.bukkit.entity.Player;
+
+Player player = // your player
+
+EntityTracker tracker = BetterModel.limb("custom_player_model")
+    .map(r -> r.getOrCreate(BukkitAdapter.adapt(player)))
+    .orElse(null);
+
+// This creates a PlayerTracker automatically
+if (tracker instanceof kr.toxicity.model.api.tracker.PlayerTracker playerTracker) {
+    System.out.println("Player tracker created");
+}
+```
+
+### Simplified Player Animation API
+
+```java
+import kr.toxicity.model.api.animation.AnimationModifier;
+
+// Shorthand for playing animations on players
+boolean success = BetterModel.platform().modelManager().animate(
+    BukkitAdapter.adapt(player),
+    "custom_player_model",
+    "wave",
+    AnimationModifier.DEFAULT_WITH_PLAY_ONCE
+);
+```
+
+<Warning>
+Player limb models are **not saved** when the server restarts. They must be recreated on player join.
+</Warning>
+
+## Common Patterns
+
+### Entity Spawn Integration
+
+```java
+@EventHandler
+public void onEntitySpawn(EntitySpawnEvent event) {
+    Entity entity = event.getEntity();
+    
+    if (entity.getType() == EntityType.ZOMBIE) {
+        BetterModel.model("demon_knight")
+            .ifPresent(model -> {
+                model.create(
+                    BukkitAdapter.adapt(entity),
+                    TrackerModifier.DEFAULT,
+                    tracker -> tracker.animate("idle")
+                );
+            });
+    }
+}
+```
+
+### Removing Models on Death
+
+```java
+@EventHandler
+public void onEntityDeath(EntityDeathEvent event) {
+    Entity entity = event.getEntity();
+    
+    BetterModel.registry(entity.getUniqueId()).ifPresent(registry -> {
+        registry.trackers().values().forEach(tracker -> {
+            tracker.animate("death", AnimationModifier.DEFAULT_WITH_PLAY_ONCE, tracker::close);
+        });
+    });
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Playing Animations" icon="play" href="/guides/playing-animations">
+    Control and sequence animations
+  </Card>
+  <Card title="Custom Hitboxes" icon="hand-pointer" href="/guides/custom-hitboxes">
+    Add interactive hitboxes to your models
+  </Card>
+</CardGroup>

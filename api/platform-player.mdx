@@ -1,0 +1,299 @@
+---
+title: PlatformPlayer
+description: Platform-agnostic player interface combining living entity and offline player properties
+---
+
+## Overview
+
+`PlatformPlayer` represents a player in the underlying platform. This interface combines the properties of a living entity and an offline player, providing access to player-specific data like name and online status, as well as all living entity functionality.
+
+**Package:** `kr.toxicity.model.api.platform`
+
+**Extends:** `PlatformLivingEntity`, `PlatformOfflinePlayer`
+
+**Since:** 2.0.0
+
+## Core Properties
+
+### name()
+
+```java
+@Override
+@NotNull String name()
+```
+
+Returns the name of the player.
+
+**Returns:** The player name (never null for online players)
+
+**Since:** 2.0.0
+
+## Inherited from PlatformEntity
+
+### uuid()
+
+```java
+@NotNull UUID uuid()
+```
+
+Returns the unique identifier of the player.
+
+**Returns:** The player's UUID
+
+**Since:** 2.0.0
+
+### location()
+
+```java
+@NotNull PlatformLocation location()
+```
+
+Returns the current location of the player.
+
+**Returns:** The player's location
+
+**Since:** 2.0.0
+
+### registry()
+
+```java
+default @NotNull Optional<EntityTrackerRegistry> registry()
+```
+
+Retrieves the tracker registry associated with this player.
+
+**Returns:** An optional containing the registry if it exists
+
+**Since:** 2.0.0
+
+### tracker()
+
+```java
+default @NotNull Optional<EntityTracker> tracker(@NotNull String name)
+```
+
+Retrieves a specific tracker by name from this player's registry.
+
+**Parameters:**
+- `name` - The name of the tracker
+
+**Returns:** An optional containing the tracker if found
+
+**Since:** 2.0.0
+
+## Inherited from PlatformLivingEntity
+
+### eyeLocation()
+
+```java
+@NotNull PlatformLocation eyeLocation()
+```
+
+Returns the eye location of the player (camera position).
+
+**Returns:** The eye location
+
+**Since:** 2.0.0
+
+**Example:**
+```java
+PlatformPlayer player = ...;
+PlatformLocation eyeLoc = player.eyeLocation();
+
+// Eye location is typically 1.62 blocks above feet location
+PlatformLocation feetLoc = player.location();
+double eyeHeight = eyeLoc.y() - feetLoc.y();
+```
+
+## Task Scheduling
+
+Inherited from `PlatformRegionHolder`:
+
+### task()
+
+```java
+@Nullable ModelTask task(@NotNull Runnable runnable)
+```
+
+Schedules a task to run on the next tick, synchronized with this player's region.
+
+**Parameters:**
+- `runnable` - The task to run
+
+**Returns:** The scheduled task, or `null` if scheduling failed
+
+**Since:** 2.0.0
+
+### taskLater()
+
+```java
+@Nullable ModelTask taskLater(long delay, @NotNull Runnable runnable)
+```
+
+Schedules a task to run after a delay, synchronized with this player's region.
+
+**Parameters:**
+- `delay` - The delay in ticks
+- `runnable` - The task to run
+
+**Returns:** The scheduled task, or `null` if scheduling failed
+
+**Since:** 2.0.0
+
+## Platform Adapter Usage
+
+Use `BukkitAdapter` to convert Bukkit players to `PlatformPlayer`:
+
+```java
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+import org.bukkit.entity.Player;
+
+// Convert Bukkit player
+Player bukkitPlayer = ...; // Get from Bukkit API
+PlatformPlayer platformPlayer = BukkitAdapter.adapt(bukkitPlayer);
+
+// Access player properties
+String name = platformPlayer.name();
+UUID uuid = platformPlayer.uuid();
+PlatformLocation location = platformPlayer.location();
+PlatformLocation eyeLocation = platformPlayer.eyeLocation();
+
+// Work with custom models
+platformPlayer.registry().ifPresent(registry -> {
+    registry.tracker("hat").ifPresent(tracker -> {
+        tracker.visible(true);
+    });
+});
+```
+
+## Usage Examples
+
+### Basic Player Access
+
+```java
+import kr.toxicity.model.api.platform.PlatformPlayer;
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+
+public void handlePlayer(Player bukkitPlayer) {
+    PlatformPlayer player = BukkitAdapter.adapt(bukkitPlayer);
+    
+    // Get player info
+    String name = player.name();
+    UUID uuid = player.uuid();
+    
+    System.out.println("Player: " + name + " (" + uuid + ")");
+    
+    // Get positions
+    PlatformLocation feet = player.location();
+    PlatformLocation eyes = player.eyeLocation();
+    
+    System.out.println("Feet: " + feet.y());
+    System.out.println("Eyes: " + eyes.y());
+}
+```
+
+### Custom Model Management
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.data.blueprint.ModelBlueprint;
+
+public void equipPlayerModel(PlatformPlayer player, String modelName) {
+    // Get or create player's tracker registry
+    var registry = player.registry().orElseGet(() -> 
+        BetterModel.api().createRegistry(player.uuid())
+    );
+    
+    // Get model blueprint
+    ModelBlueprint blueprint = BetterModel.api().blueprint(modelName)
+        .orElseThrow(() -> new IllegalArgumentException("Model not found: " + modelName));
+    
+    // Create and register tracker
+    var tracker = blueprint.createTracker(player);
+    registry.register("custom_model", tracker);
+    
+    System.out.println("Equipped " + modelName + " on " + player.name());
+}
+```
+
+### Player Tracking
+
+```java
+public void showModelToNearbyPlayers(PlatformPlayer target) {
+    PlatformLocation targetLoc = target.location();
+    
+    // Get nearby entities
+    target.registry().ifPresent(registry -> {
+        // Access model trackers
+        registry.trackers().forEach((name, tracker) -> {
+            System.out.println("Player " + target.name() + " has tracker: " + name);
+            
+            // Update tracker visibility
+            tracker.visible(true);
+        });
+    });
+}
+```
+
+### Region-Safe Operations
+
+```java
+public void schedulePlayerTask(PlatformPlayer player) {
+    // Schedule task on player's region (important for Folia)
+    player.taskLater(20L, () -> {
+        // This runs on the player's region thread after 1 second
+        PlatformLocation currentLoc = player.location();
+        System.out.println(player.name() + " is now at: " + currentLoc.x() + ", " + currentLoc.z());
+    });
+}
+```
+
+### PlayerChannel Integration
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+
+public void accessPlayerChannel(PlatformPlayer player) {
+    // Get player channel (enhanced player wrapper)
+    var channel = BetterModel.platform().playerManager().player(player.uuid());
+    
+    if (channel != null) {
+        BaseEntity base = channel.base();
+        
+        // Access enhanced entity properties
+        if (base.hasModelData()) {
+            String modelData = base.modelData();
+            System.out.println(player.name() + " has model data: " + modelData);
+        }
+        
+        // Check tracking status
+        base.trackedBy().forEach(trackingPlayer -> {
+            System.out.println(trackingPlayer.name() + " is tracking " + player.name());
+        });
+    }
+}
+```
+
+## Interface Hierarchy
+
+```
+PlatformPlayer
+├── extends PlatformLivingEntity
+│   ├── extends PlatformEntity
+│   │   └── extends PlatformRegionHolder
+│   └── adds eyeLocation()
+└── extends PlatformOfflinePlayer
+    ├── uuid()
+    └── name()
+```
+
+## Related Types
+
+- [PlatformEntity](/api/platform-entity) - Base entity interface
+- [PlatformLocation](/api/platform-location) - Location representation
+- [BaseEntity](/api/base-entity) - Enhanced entity adapter
+- `PlatformLivingEntity` - Living entity interface
+- `PlatformOfflinePlayer` - Offline player data
+- `EntityTrackerRegistry` - Entity tracker management
+- `PlayerChannel` - Enhanced player wrapper with model data

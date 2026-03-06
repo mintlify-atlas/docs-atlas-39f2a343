@@ -1,0 +1,458 @@
+---
+title: Multi-Part Entities
+description: Create complex entities with multiple synchronized model parts
+icon: puzzle-piece
+---
+
+Learn how to build entities composed of multiple models that work together as a single unit.
+
+## Overview
+
+Multi-part entities allow you to:
+- Create large bosses with multiple body segments
+- Build modular entities with detachable parts
+- Synchronize animations across multiple models
+- Handle individual part interactions
+
+## Basic Multi-Part System
+
+### Core Multi-Part Entity
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import kr.toxicity.model.api.tracker.DummyTracker;
+import kr.toxicity.model.api.tracker.TrackerModifier;
+import org.bukkit.Location;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Zombie;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class MultiPartEntity {
+    
+    private final String entityId;
+    private final Map<String, EntityPart> parts = new LinkedHashMap<>();
+    private final LivingEntity coreEntity;
+    
+    public MultiPartEntity(String entityId, Location location) {
+        this.entityId = entityId;
+        
+        // Create core entity
+        this.coreEntity = location.getWorld().spawn(location, Zombie.class, zombie -> {
+            zombie.setInvisible(true);
+            zombie.setInvulnerable(true);
+        });
+        
+        // Create parts
+        createParts(location);
+    }
+    
+    private void createParts(Location baseLocation) {
+        // Create head part
+        addPart("head", "dragon_head", baseLocation.clone().add(0, 2, 0), true);
+        
+        // Create body parts
+        addPart("body_1", "dragon_body", baseLocation.clone().add(0, 1, 0), true);
+        addPart("body_2", "dragon_body", baseLocation.clone().add(0, 0, -1), true);
+        
+        // Create tail parts
+        addPart("tail_1", "dragon_tail", baseLocation.clone().add(0, 0, -2), true);
+        addPart("tail_2", "dragon_tail", baseLocation.clone().add(0, 0, -3), true);
+        
+        // Create wings (dummy trackers)
+        addPart("wing_left", "dragon_wing", baseLocation.clone().add(-1.5, 1.5, 0), false);
+        addPart("wing_right", "dragon_wing", baseLocation.clone().add(1.5, 1.5, 0), false);
+    }
+    
+    private void addPart(String partId, String modelName, Location location, boolean useEntityTracker) {
+        EntityPart part;
+        
+        if (useEntityTracker) {
+            // Create entity-based part
+            ArmorStand stand = location.getWorld().spawn(location, ArmorStand.class, as -> {
+                as.setVisible(false);
+                as.setGravity(false);
+                as.setMarker(true);
+            });
+            
+            EntityTracker tracker = BetterModel.model(modelName)
+                .map(renderer -> renderer.getOrCreate(BaseEntity.of(stand)))
+                .orElse(null);
+            
+            part = new EntityPart(partId, tracker, stand);
+        } else {
+            // Create dummy tracker part
+            DummyTracker tracker = BetterModel.model(modelName)
+                .map(renderer -> renderer.create(location))
+                .orElse(null);
+            
+            part = new EntityPart(partId, tracker, null);
+        }
+        
+        if (part.tracker != null) {
+            parts.put(partId, part);
+        }
+    }
+    
+    public void synchronizeAnimations(String animationName) {
+        // Play animation on all parts
+        parts.values().forEach(part -> {
+            if (part.tracker != null) {
+                part.tracker.animate(animationName);
+            }
+        });
+    }
+    
+    public void updatePositions() {
+        // Update part positions relative to core entity
+        Location coreLocation = coreEntity.getLocation();
+        
+        // Example: Simple chain positioning
+        List<EntityPart> bodyParts = new ArrayList<>(parts.values());
+        for (int i = 0; i < bodyParts.size(); i++) {
+            EntityPart part = bodyParts.get(i);
+            if (part.entity != null) {
+                Location targetLoc = coreLocation.clone().add(0, 0, -i);
+                part.entity.teleport(targetLoc);
+            }
+        }
+    }
+    
+    public void damagePart(String partId, double damage) {
+        EntityPart part = parts.get(partId);
+        if (part != null && part.tracker instanceof EntityTracker tracker) {
+            // Play damage animation on specific part
+            tracker.damageTint();
+            tracker.animate("damage");
+        }
+    }
+    
+    public void removePart(String partId) {
+        EntityPart part = parts.remove(partId);
+        if (part != null) {
+            // Play destruction animation
+            if (part.tracker != null) {
+                part.tracker.animate("destroy", AnimationModifier.DEFAULT_WITH_PLAY_ONCE, () -> {
+                    part.tracker.close();
+                });
+            }
+            if (part.entity != null) {
+                part.entity.remove();
+            }
+        }
+    }
+    
+    public void remove() {
+        parts.values().forEach(part -> {
+            if (part.tracker != null) part.tracker.close();
+            if (part.entity != null) part.entity.remove();
+        });
+        parts.clear();
+        coreEntity.remove();
+    }
+    
+    public Optional<EntityPart> getPart(String partId) {
+        return Optional.ofNullable(parts.get(partId));
+    }
+    
+    public Collection<EntityPart> getAllParts() {
+        return parts.values();
+    }
+    
+    public static class EntityPart {
+        private final String id;
+        private final kr.toxicity.model.api.tracker.Tracker tracker;
+        private final LivingEntity entity;
+        
+        public EntityPart(String id, kr.toxicity.model.api.tracker.Tracker tracker, LivingEntity entity) {
+            this.id = id;
+            this.tracker = tracker;
+            this.entity = entity;
+        }
+        
+        public String getId() { return id; }
+        public kr.toxicity.model.api.tracker.Tracker getTracker() { return tracker; }
+        public LivingEntity getEntity() { return entity; }
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.tracker.EntityTracker
+import kr.toxicity.model.api.tracker.DummyTracker
+import kr.toxicity.model.api.tracker.Tracker
+import kr.toxicity.model.api.animation.AnimationModifier
+import org.bukkit.Location
+import org.bukkit.entity.ArmorStand
+import org.bukkit.entity.LivingEntity
+import org.bukkit.entity.Zombie
+
+class MultiPartEntity(
+    val entityId: String,
+    location: Location
+) {
+    private val parts = LinkedHashMap<String, EntityPart>()
+    val coreEntity: LivingEntity
+    
+    init {
+        coreEntity = location.world.spawn(location, Zombie::class.java) { zombie ->
+            zombie.isInvisible = true
+            zombie.isInvulnerable = true
+        }
+        
+        createParts(location)
+    }
+    
+    private fun createParts(baseLocation: Location) {
+        addPart("head", "dragon_head", baseLocation.clone().add(0.0, 2.0, 0.0), true)
+        addPart("body_1", "dragon_body", baseLocation.clone().add(0.0, 1.0, 0.0), true)
+        addPart("body_2", "dragon_body", baseLocation.clone().add(0.0, 0.0, -1.0), true)
+        addPart("tail_1", "dragon_tail", baseLocation.clone().add(0.0, 0.0, -2.0), true)
+        addPart("tail_2", "dragon_tail", baseLocation.clone().add(0.0, 0.0, -3.0), true)
+        addPart("wing_left", "dragon_wing", baseLocation.clone().add(-1.5, 1.5, 0.0), false)
+        addPart("wing_right", "dragon_wing", baseLocation.clone().add(1.5, 1.5, 0.0), false)
+    }
+    
+    private fun addPart(partId: String, modelName: String, location: Location, useEntityTracker: Boolean) {
+        val part = if (useEntityTracker) {
+            val stand = location.world.spawn(location, ArmorStand::class.java) { as ->
+                as.isVisible = false
+                as.setGravity(false)
+                as.isMarker = true
+            }
+            
+            val tracker = BetterModel.model(modelName)
+                .map { it.getOrCreate(BaseEntity.of(stand)) }
+                .orElse(null)
+            
+            EntityPart(partId, tracker, stand)
+        } else {
+            val tracker = BetterModel.model(modelName)
+                .map { it.create(location) }
+                .orElse(null)
+            
+            EntityPart(partId, tracker, null)
+        }
+        
+        if (part.tracker != null) {
+            parts[partId] = part
+        }
+    }
+    
+    fun synchronizeAnimations(animationName: String) {
+        parts.values.forEach { part ->
+            part.tracker?.animate(animationName)
+        }
+    }
+    
+    fun updatePositions() {
+        val coreLocation = coreEntity.location
+        
+        parts.values.forEachIndexed { i, part ->
+            part.entity?.teleport(coreLocation.clone().add(0.0, 0.0, -i.toDouble()))
+        }
+    }
+    
+    fun damagePart(partId: String, damage: Double) {
+        val part = parts[partId]
+        val tracker = part?.tracker as? EntityTracker ?: return
+        
+        tracker.damageTint()
+        tracker.animate("damage")
+    }
+    
+    fun removePart(partId: String) {
+        val part = parts.remove(partId) ?: return
+        
+        part.tracker?.animate("destroy", AnimationModifier.DEFAULT_WITH_PLAY_ONCE) {
+            part.tracker.close()
+        }
+        part.entity?.remove()
+    }
+    
+    fun remove() {
+        parts.values.forEach { part ->
+            part.tracker?.close()
+            part.entity?.remove()
+        }
+        parts.clear()
+        coreEntity.remove()
+    }
+    
+    fun getPart(partId: String): EntityPart? = parts[partId]
+    fun getAllParts(): Collection<EntityPart> = parts.values
+    
+    data class EntityPart(
+        val id: String,
+        val tracker: Tracker?,
+        val entity: LivingEntity?
+    )
+}
+```
+</CodeGroup>
+
+## Segmented Dragon Boss
+
+### Advanced Dragon with Multiple Segments
+
+```java
+import kr.toxicity.model.api.tracker.ModelRotation;
+import org.bukkit.util.Vector;
+
+public class SegmentedDragon extends MultiPartEntity {
+    
+    private final List<DragonSegment> segments = new ArrayList<>();
+    
+    public SegmentedDragon(String id, Location location) {
+        super(id, location);
+        initializeSegments();
+    }
+    
+    private void initializeSegments() {
+        // Create head segment
+        segments.add(new DragonSegment(
+            getPart("head").orElse(null),
+            SegmentType.HEAD,
+            100.0
+        ));
+        
+        // Create body segments
+        segments.add(new DragonSegment(
+            getPart("body_1").orElse(null),
+            SegmentType.BODY,
+            150.0
+        ));
+        segments.add(new DragonSegment(
+            getPart("body_2").orElse(null),
+            SegmentType.BODY,
+            150.0
+        ));
+        
+        // Setup smooth following
+        setupSegmentFollowing();
+    }
+    
+    private void setupSegmentFollowing() {
+        // Each segment follows the one in front
+        for (int i = 1; i < segments.size(); i++) {
+            DragonSegment current = segments.get(i);
+            DragonSegment previous = segments.get(i - 1);
+            
+            if (current.part != null && current.part.getTracker() != null) {
+                current.part.getTracker().tick(2, (t, bundler) -> {
+                    updateSegmentPosition(current, previous);
+                });
+            }
+        }
+    }
+    
+    private void updateSegmentPosition(DragonSegment current, DragonSegment previous) {
+        if (previous.part == null || previous.part.getEntity() == null) return;
+        if (current.part == null || current.part.getEntity() == null) return;
+        
+        Location targetLoc = previous.part.getEntity().getLocation();
+        Location currentLoc = current.part.getEntity().getLocation();
+        
+        // Calculate direction from previous segment
+        Vector direction = targetLoc.toVector()
+            .subtract(currentLoc.toVector())
+            .normalize();
+        
+        // Move toward target with smooth interpolation
+        Location newLoc = currentLoc.add(direction.multiply(0.3));
+        current.part.getEntity().teleport(newLoc);
+        
+        // Update rotation
+        float yaw = (float) Math.toDegrees(Math.atan2(-direction.getX(), direction.getZ()));
+        if (current.part.getTracker() instanceof EntityTracker tracker) {
+            tracker.rotation(() -> new ModelRotation(0, yaw));
+        }
+    }
+    
+    public void damageSegment(int segmentIndex, double damage) {
+        if (segmentIndex < 0 || segmentIndex >= segments.size()) return;
+        
+        DragonSegment segment = segments.get(segmentIndex);
+        segment.health -= damage;
+        
+        if (segment.health <= 0) {
+            destroySegment(segmentIndex);
+        } else {
+            // Damage animation
+            damagePart(segment.part.getId(), damage);
+        }
+    }
+    
+    private void destroySegment(int segmentIndex) {
+        DragonSegment segment = segments.get(segmentIndex);
+        removePart(segment.part.getId());
+        segments.remove(segmentIndex);
+        
+        // Check if dragon is defeated
+        if (segments.isEmpty()) {
+            onDefeat();
+        }
+    }
+    
+    private void onDefeat() {
+        remove();
+    }
+    
+    private static class DragonSegment {
+        private final EntityPart part;
+        private final SegmentType type;
+        private double health;
+        
+        public DragonSegment(EntityPart part, SegmentType type, double health) {
+            this.part = part;
+            this.type = type;
+            this.health = health;
+        }
+    }
+    
+    private enum SegmentType {
+        HEAD, BODY, TAIL
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+  - Use entity trackers for parts that need collision/hitboxes
+  - Use dummy trackers for decorative parts (wings, effects)
+  - Synchronize animations across all parts for cohesive movement
+  - Implement smooth interpolation for segment following
+  - Cache part references for quick access
+</Tip>
+
+<Warning>
+  - Limit the number of parts to maintain performance
+  - Clean up all parts when removing the entity
+  - Test part interactions thoroughly
+  - Consider network overhead with many entities
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dynamic Boss" icon="dragon" href="/examples/dynamic-boss">
+    Create complex boss entities
+  </Card>
+  <Card title="Custom Events" icon="bolt" href="/examples/custom-events">
+    Handle part-specific interactions
+  </Card>
+  <Card title="Performance Optimization" icon="gauge-high" href="/examples/performance-optimization">
+    Optimize multi-part entities
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/entity-tracker">
+    EntityTracker API documentation
+  </Card>
+</CardGroup>

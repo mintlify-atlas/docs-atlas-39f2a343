@@ -1,0 +1,311 @@
+---
+title: PlatformLocation
+description: Platform-agnostic location interface for coordinates, rotation, and distance calculations
+---
+
+## Overview
+
+`PlatformLocation` represents a location in the underlying platform. It provides access to coordinates (x, y, z), rotation (pitch, yaw), and the world, as well as methods for manipulating locations and calculating distances.
+
+**Package:** `kr.toxicity.model.api.platform`
+
+**Extends:** `PlatformRegionHolder`
+
+**Since:** 2.0.0
+
+## Core Properties
+
+### world()
+
+```java
+PlatformWorld world()
+```
+
+Returns the world associated with this location.
+
+**Returns:** The world
+
+**Since:** 2.0.0
+
+### x()
+
+```java
+double x()
+```
+
+Returns the X coordinate.
+
+**Returns:** The X coordinate
+
+**Since:** 2.0.0
+
+### y()
+
+```java
+double y()
+```
+
+Returns the Y coordinate.
+
+**Returns:** The Y coordinate
+
+**Since:** 2.0.0
+
+### z()
+
+```java
+double z()
+```
+
+Returns the Z coordinate.
+
+**Returns:** The Z coordinate
+
+**Since:** 2.0.0
+
+## Rotation
+
+### pitch()
+
+```java
+float pitch()
+```
+
+Returns the pitch (vertical rotation).
+
+**Returns:** The pitch in degrees
+
+**Since:** 2.0.0
+
+### yaw()
+
+```java
+float yaw()
+```
+
+Returns the yaw (horizontal rotation).
+
+**Returns:** The yaw in degrees
+
+**Since:** 2.0.0
+
+## Location Manipulation
+
+### add()
+
+```java
+@NotNull PlatformLocation add(double x, double y, double z)
+```
+
+Creates a new location by adding the specified coordinates to this location.
+
+**Parameters:**
+- `x` - The X offset
+- `y` - The Y offset
+- `z` - The Z offset
+
+**Returns:** The new location
+
+**Since:** 2.0.0
+
+**Example:**
+```java
+PlatformLocation original = entity.location();
+PlatformLocation above = original.add(0, 2, 0); // 2 blocks above
+PlatformLocation forward = original.add(5, 0, 0); // 5 blocks forward
+```
+
+## Distance Calculations
+
+### distance()
+
+```java
+default double distance(@NotNull PlatformLocation other)
+```
+
+Calculates the distance between this location and another location.
+
+**Parameters:**
+- `other` - The other location
+
+**Returns:** The distance
+
+**Since:** 2.1.0
+
+**Example:**
+```java
+PlatformLocation loc1 = entity1.location();
+PlatformLocation loc2 = entity2.location();
+double dist = loc1.distance(loc2);
+
+if (dist < 5.0) {
+    System.out.println("Entities are within 5 blocks");
+}
+```
+
+### distanceSquared()
+
+```java
+default double distanceSquared(@NotNull PlatformLocation other)
+```
+
+Calculates the squared distance between this location and another location.
+
+<Info>
+Use this method instead of `distance()` when comparing distances, as it avoids the expensive square root calculation.
+</Info>
+
+**Parameters:**
+- `other` - The other location
+
+**Returns:** The squared distance
+
+**Since:** 2.1.0
+
+**Example:**
+```java
+PlatformLocation playerLoc = player.location();
+PlatformLocation targetLoc = target.location();
+
+// More efficient than distance() < 10.0
+if (playerLoc.distanceSquared(targetLoc) < 100.0) { // 10^2
+    System.out.println("Target is within 10 blocks");
+}
+```
+
+## Task Scheduling
+
+Inherited from `PlatformRegionHolder`:
+
+### task()
+
+```java
+@Nullable ModelTask task(@NotNull Runnable runnable)
+```
+
+Schedules a task to run on the next tick, synchronized with this location's region.
+
+**Parameters:**
+- `runnable` - The task to run
+
+**Returns:** The scheduled task, or `null` if scheduling failed
+
+**Since:** 2.0.0
+
+### taskLater()
+
+```java
+@Nullable ModelTask taskLater(long delay, @NotNull Runnable runnable)
+```
+
+Schedules a task to run after a delay, synchronized with this location's region.
+
+**Parameters:**
+- `delay` - The delay in ticks
+- `runnable` - The task to run
+
+**Returns:** The scheduled task, or `null` if scheduling failed
+
+**Since:** 2.0.0
+
+## Platform Adapter Usage
+
+Use `BukkitAdapter` to convert Bukkit locations to `PlatformLocation`:
+
+```java
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+import org.bukkit.Location;
+
+// Convert Bukkit location
+Location bukkitLocation = new Location(world, 100, 64, 200, 90f, 0f);
+PlatformLocation platformLocation = BukkitAdapter.adapt(bukkitLocation);
+
+// Access coordinates
+double x = platformLocation.x(); // 100.0
+double y = platformLocation.y(); // 64.0
+double z = platformLocation.z(); // 200.0
+
+// Access rotation
+float yaw = platformLocation.yaw();     // 90.0
+float pitch = platformLocation.pitch(); // 0.0
+```
+
+## Usage Examples
+
+### Basic Usage
+
+```java
+import kr.toxicity.model.api.platform.PlatformLocation;
+import kr.toxicity.model.api.platform.PlatformEntity;
+
+public void checkEntityPosition(PlatformEntity entity) {
+    PlatformLocation loc = entity.location();
+    
+    // Get coordinates
+    double x = loc.x();
+    double y = loc.y();
+    double z = loc.z();
+    
+    System.out.println("Entity at: " + x + ", " + y + ", " + z);
+    
+    // Get rotation
+    float yaw = loc.yaw();
+    float pitch = loc.pitch();
+    
+    System.out.println("Facing: yaw=" + yaw + ", pitch=" + pitch);
+}
+```
+
+### Distance Checking
+
+```java
+public void checkProximity(PlatformEntity entity1, PlatformEntity entity2) {
+    PlatformLocation loc1 = entity1.location();
+    PlatformLocation loc2 = entity2.location();
+    
+    // Calculate distance
+    double distance = loc1.distance(loc2);
+    
+    if (distance < 5.0) {
+        System.out.println("Entities are close!");
+    }
+    
+    // More efficient for comparisons
+    if (loc1.distanceSquared(loc2) < 25.0) { // 5^2
+        System.out.println("Same check, but faster!");
+    }
+}
+```
+
+### Location Offsetting
+
+```java
+public void spawnEffectAboveEntity(PlatformEntity entity) {
+    PlatformLocation baseLoc = entity.location();
+    
+    // Create location 2 blocks above entity
+    PlatformLocation effectLoc = baseLoc.add(0, 2, 0);
+    
+    // Spawn particle or effect at effectLoc
+    // ...
+}
+```
+
+### Region-Safe Task Scheduling
+
+```java
+public void scheduleLocationTask(PlatformLocation location) {
+    // Schedule task on location's region (important for Folia)
+    location.taskLater(20L, () -> {
+        System.out.println("Task executed at location's region");
+        // Safely access blocks at this location
+    });
+}
+```
+
+## Related Types
+
+- [PlatformEntity](/api/platform-entity) - Entity with location
+- `PlatformWorld` - World representation
+- `PlatformRegionHolder` - Region-aware task scheduling
+- `ModelTask` - Scheduled task handle

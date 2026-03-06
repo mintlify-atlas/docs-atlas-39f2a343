@@ -1,0 +1,314 @@
+---
+title: AnimationModifier
+description: A modifier class for controlling animation playback behavior
+---
+
+`AnimationModifier` is a record that configures how an animation should be played, including lerp timing, speed, loop behavior, and conditional execution.
+
+## Package
+
+```java
+kr.toxicity.model.api.animation.AnimationModifier
+```
+
+## Record Components
+
+| Component | Type | Description |
+|-----------|------|-------------|
+| `predicate` | `BooleanSupplier` | Condition that must be true for animation to play (nullable) |
+| `start` | `int` | Lerp-in time in ticks |
+| `end` | `int` | Lerp-out time in ticks |
+| `type` | `AnimationIterator.Type` | Animation loop type (nullable, uses default if null) |
+| `speed` | `FloatSupplier` | Speed modifier supplier (nullable, 1.0 if null) |
+| `override` | `Boolean` | Whether to override existing animations (nullable) |
+| `player` | `PlatformPlayer` | Target player for this animation (nullable) |
+
+## Static Constants
+
+### DEFAULT
+
+```java
+public static final AnimationModifier DEFAULT
+```
+
+Default modifier with no customizations.
+
+### DEFAULT_WITH_PLAY_ONCE
+
+```java
+public static final AnimationModifier DEFAULT_WITH_PLAY_ONCE
+```
+
+Default modifier configured to play animation once without looping.
+
+## Builder Methods
+
+### builder()
+
+```java
+public static Builder builder()
+```
+
+Creates a new builder instance.
+
+**Returns:** A new `AnimationModifier.Builder`
+
+### toBuilder()
+
+```java
+public Builder toBuilder()
+```
+
+Converts this modifier to a builder with all current values preset.
+
+**Returns:** A builder initialized with this modifier's values
+
+## Constructors
+
+### AnimationModifier(int, int)
+
+```java
+public AnimationModifier(int start, int end)
+```
+
+Creates a modifier with only lerp timing.
+
+### AnimationModifier(int, int, float)
+
+```java
+public AnimationModifier(int start, int end, float speedValue)
+```
+
+Creates a modifier with lerp timing and speed.
+
+### AnimationModifier(int, int, FloatSupplier)
+
+```java
+public AnimationModifier(int start, int end, @Nullable FloatSupplier supplier)
+```
+
+Creates a modifier with lerp timing and dynamic speed.
+
+### AnimationModifier(int, int, AnimationIterator.Type)
+
+```java
+public AnimationModifier(int start, int end, @Nullable AnimationIterator.Type type)
+```
+
+Creates a modifier with lerp timing and loop type.
+
+### AnimationModifier(int, int, AnimationIterator.Type, FloatSupplier)
+
+```java
+public AnimationModifier(
+    int start,
+    int end,
+    @Nullable AnimationIterator.Type type,
+    @Nullable FloatSupplier speed
+)
+```
+
+Creates a modifier with lerp timing, loop type, and speed.
+
+### AnimationModifier(BooleanSupplier, int, int, AnimationIterator.Type, FloatSupplier)
+
+```java
+public AnimationModifier(
+    @Nullable BooleanSupplier predicate,
+    int start,
+    int end,
+    @Nullable AnimationIterator.Type type,
+    @Nullable FloatSupplier speed
+)
+```
+
+Creates a modifier with all core parameters.
+
+## Instance Methods
+
+### type(AnimationIterator.Type)
+
+```java
+public AnimationIterator.Type type(@NotNull AnimationIterator.Type defaultType)
+```
+
+Returns the modifier's type or the provided default if type is null.
+
+### speedValue()
+
+```java
+public float speedValue()
+```
+
+Returns the current speed value, or 1.0 if no speed modifier is set.
+
+### predicateValue()
+
+```java
+public boolean predicateValue()
+```
+
+Evaluates the predicate, returning true if no predicate is set or if the predicate returns true.
+
+### override(boolean)
+
+```java
+public boolean override(boolean original)
+```
+
+Returns the override flag if set, otherwise returns the provided original value.
+
+## Builder Class
+
+The `AnimationModifier.Builder` provides a fluent API for constructing modifiers.
+
+### Builder Methods
+
+#### predicate(BooleanSupplier)
+
+```java
+public Builder predicate(@Nullable BooleanSupplier predicate)
+```
+
+Sets the predicate condition. The predicate is automatically throttled to tick rate.
+
+#### start(int)
+
+```java
+public Builder start(int start)
+```
+
+Sets the lerp-in time in ticks.
+
+#### end(int)
+
+```java
+public Builder end(int end)
+```
+
+Sets the lerp-out time in ticks.
+
+#### type(AnimationIterator.Type)
+
+```java
+public Builder type(@Nullable AnimationIterator.Type type)
+```
+
+Sets the animation loop type.
+
+#### speed(float)
+
+```java
+public Builder speed(float speed)
+```
+
+Sets a constant speed modifier.
+
+#### speed(FloatSupplier)
+
+```java
+public Builder speed(@Nullable FloatSupplier speed)
+```
+
+Sets a dynamic speed modifier. The supplier is automatically throttled to tick rate.
+
+#### override(Boolean)
+
+```java
+public Builder override(@Nullable Boolean override)
+```
+
+Sets whether this animation should override others.
+
+#### player(PlatformPlayer)
+
+```java
+public Builder player(@Nullable PlatformPlayer player)
+```
+
+Sets the target player for this animation.
+
+#### mergeNotDefault(AnimationModifier)
+
+```java
+public Builder mergeNotDefault(@NotNull AnimationModifier modifier)
+```
+
+Merges non-default values from another modifier into this builder.
+
+#### build()
+
+```java
+public AnimationModifier build()
+```
+
+Constructs the `AnimationModifier` instance.
+
+## Usage Examples
+
+### Basic Animation with Lerp
+
+```java
+AnimationModifier modifier = AnimationModifier.builder()
+    .start(5)  // 5 tick lerp-in
+    .end(10)   // 10 tick lerp-out
+    .build();
+```
+
+### Conditional Animation with Speed
+
+```java
+AnimationModifier modifier = AnimationModifier.builder()
+    .predicate(() -> player.isSprinting())
+    .speed(1.5f)  // 50% faster
+    .type(AnimationIterator.Type.LOOP)
+    .build();
+```
+
+### Play Once Animation
+
+```java
+AnimationModifier modifier = AnimationModifier.DEFAULT_WITH_PLAY_ONCE;
+// or
+AnimationModifier modifier = AnimationModifier.builder()
+    .type(AnimationIterator.Type.PLAY_ONCE)
+    .build();
+```
+
+### Dynamic Speed Based on Game State
+
+```java
+AnimationModifier modifier = AnimationModifier.builder()
+    .speed(() -> 0.5f + (player.getHealth() / player.getMaxHealth()) * 0.5f)
+    .build();
+```
+
+### Override Existing Animations
+
+```java
+AnimationModifier modifier = AnimationModifier.builder()
+    .override(true)
+    .start(3)
+    .end(3)
+    .build();
+```
+
+### Merging Modifiers
+
+```java
+AnimationModifier base = AnimationModifier.builder()
+    .start(5)
+    .end(5)
+    .build();
+
+AnimationModifier extended = base.toBuilder()
+    .speed(2.0f)
+    .type(AnimationIterator.Type.LOOP)
+    .build();
+```
+
+## See Also
+
+- [AnimationIterator](/api/animation-iterator) - Animation loop behavior
+- [BlueprintAnimation](/api/blueprint-animation) - Complete animation data
+- [TrackerAnimation](/api/tracker-animation) - Animation configuration for trackers

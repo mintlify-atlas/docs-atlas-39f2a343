@@ -1,0 +1,255 @@
+---
+title: AnimationIterator
+description: An iterator interface for traversing animation keyframes with different loop modes
+---
+
+`AnimationIterator` is a sealed interface that provides iteration over animation keyframes with support for different playback modes.
+
+## Package
+
+```java
+kr.toxicity.model.api.animation.AnimationIterator<T extends Timed>
+```
+
+## Type Parameters
+
+- `T` - The type of keyframe (must implement `Timed`)
+
+## Methods
+
+### clear()
+
+```java
+void clear()
+```
+
+Resets the iterator to its initial state.
+
+**Since:** 1.15.2
+
+### type()
+
+```java
+@NotNull Type type()
+```
+
+Returns the loop type of this animation iterator.
+
+**Returns:** The animation type
+
+**Since:** 1.15.2
+
+### hasNext()
+
+```java
+boolean hasNext()
+```
+
+Inherited from `Iterator<T>`. Returns whether more keyframes are available.
+
+### next()
+
+```java
+T next()
+```
+
+Inherited from `Iterator<T>`. Returns the next keyframe.
+
+## Type Enum
+
+The `AnimationIterator.Type` enum defines animation playback behavior.
+
+### Enum Constants
+
+#### PLAY_ONCE
+
+```java
+PLAY_ONCE
+```
+
+Plays the animation once and then stops. Serialized as `"once"`.
+
+**Since:** 1.15.2
+
+#### LOOP
+
+```java
+LOOP
+```
+
+Loops the animation continuously from start to finish. Serialized as `"loop"`.
+
+**Since:** 1.15.2
+
+#### HOLD_ON_LAST
+
+```java
+HOLD_ON_LAST
+```
+
+Plays the animation once and holds the last frame indefinitely. Serialized as `"hold"`.
+
+**Since:** 1.15.2
+
+### Type Methods
+
+#### create(TimedStorage)
+
+```java
+public abstract <T extends Timed> AnimationIterator<T> create(
+    @NotNull TimedStorage<T> keyframes
+)
+```
+
+Creates a new iterator for the given keyframes based on this type.
+
+**Parameters:**
+- `keyframes` - The keyframes to iterate over
+
+**Returns:** A new animation iterator
+
+**Since:** 1.15.2
+
+## Implementation Classes
+
+The interface has three sealed implementations:
+
+### PlayOnce
+
+Implementation for `PLAY_ONCE` type. Iterates through keyframes once, then returns `false` for `hasNext()`.
+
+### Loop
+
+Implementation for `LOOP` type. When reaching the end, resets to the first keyframe and continues infinitely.
+
+### HoldOnLast
+
+Implementation for `HOLD_ON_LAST` type. After reaching the last keyframe, continues returning that frame indefinitely.
+
+## Usage Examples
+
+### Creating an Iterator
+
+```java
+TimedStorage<AnimationProgress> keyframes = ...; // Your keyframes
+
+AnimationIterator<AnimationProgress> iterator = 
+    AnimationIterator.Type.LOOP.create(keyframes);
+```
+
+### Iterating Through Keyframes
+
+```java
+AnimationIterator<AnimationProgress> iterator = 
+    AnimationIterator.Type.PLAY_ONCE.create(keyframes);
+
+while (iterator.hasNext()) {
+    AnimationProgress frame = iterator.next();
+    // Apply frame to model
+    applyKeyframe(frame);
+}
+```
+
+### Looping Animation
+
+```java
+AnimationIterator<AnimationProgress> loopIterator = 
+    AnimationIterator.Type.LOOP.create(keyframes);
+
+// Runs indefinitely
+for (int i = 0; i < 1000; i++) {
+    AnimationProgress frame = loopIterator.next();
+    renderFrame(frame);
+}
+```
+
+### Hold on Last Frame
+
+```java
+AnimationIterator<AnimationProgress> holdIterator = 
+    AnimationIterator.Type.HOLD_ON_LAST.create(keyframes);
+
+// Plays through once, then repeats last frame
+for (int i = 0; i < keyframes.size() + 50; i++) {
+    AnimationProgress frame = holdIterator.next();
+    // First keyframes.size() frames are unique
+    // Remaining frames repeat the last keyframe
+}
+```
+
+### Resetting an Iterator
+
+```java
+AnimationIterator<AnimationProgress> iterator = 
+    AnimationIterator.Type.LOOP.create(keyframes);
+
+// Use the iterator
+for (int i = 0; i < 10; i++) {
+    iterator.next();
+}
+
+// Reset to beginning
+iterator.clear();
+
+// Now starts from first frame again
+AnimationProgress first = iterator.next();
+```
+
+### Checking Iterator Type
+
+```java
+AnimationIterator<AnimationProgress> iterator = ...;
+
+switch (iterator.type()) {
+    case PLAY_ONCE:
+        System.out.println("Animation will play once");
+        break;
+    case LOOP:
+        System.out.println("Animation will loop");
+        break;
+    case HOLD_ON_LAST:
+        System.out.println("Animation will hold on last frame");
+        break;
+}
+```
+
+### Using with AnimationModifier
+
+```java
+// Create modifier with specific loop type
+AnimationModifier modifier = AnimationModifier.builder()
+    .type(AnimationIterator.Type.LOOP)
+    .build();
+
+// The type from modifier can be used to create iterator
+AnimationIterator.Type type = modifier.type(AnimationIterator.Type.PLAY_ONCE);
+AnimationIterator<AnimationProgress> iterator = type.create(keyframes);
+```
+
+## JSON Serialization
+
+The enum values serialize to JSON strings:
+
+```json
+{
+  "animationType": "loop"
+}
+```
+
+```json
+{
+  "animationType": "once"
+}
+```
+
+```json
+{
+  "animationType": "hold"
+}
+```
+
+## See Also
+
+- [AnimationModifier](/api/animation-modifier) - Animation playback modifier
+- [BlueprintAnimation](/api/blueprint-animation) - Complete animation data
+- [AnimationProgress](/api/animation-progress) - Keyframe data type

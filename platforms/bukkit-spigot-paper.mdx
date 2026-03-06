@@ -1,0 +1,357 @@
+---
+title: "Bukkit/Spigot/Paper/Purpur"
+description: "Setup and usage guide for Bukkit-based server platforms"
+---
+
+## Overview
+
+BetterModel provides full support for Bukkit-based server platforms including Bukkit, Spigot, Paper, and Purpur. The plugin automatically detects your platform and optimizes its behavior accordingly.
+
+<CardGroup cols={2}>
+  <Card title="Spigot" icon="bucket">
+    Standard Bukkit API implementation with NMS adapters
+  </Card>
+  <Card title="Paper" icon="scroll">
+    Enhanced performance with Paper's modern scheduler and APIs
+  </Card>
+  <Card title="Purpur" icon="droplet">
+    Full Paper compatibility with additional Purpur-specific hooks
+  </Card>
+  <Card title="Folia" icon="layer-group" href="/platforms/folia">
+    Region-based multithreading support (see dedicated page)
+  </Card>
+</CardGroup>
+
+## Platform Detection
+
+BetterModel automatically detects your server platform at runtime:
+
+```java Platform Detection
+public interface BetterModelBukkit extends BetterModelPlatform {
+    boolean IS_FOLIA = classExists("io.papermc.paper.threadedregions.RegionizedServer");
+    boolean IS_PURPUR = classExists("org.purpurmc.purpur.PurpurConfig");
+    boolean IS_PAPER = IS_PURPUR || IS_FOLIA || 
+        classExists("io.papermc.paper.configuration.PaperConfigurations");
+}
+```
+
+The detection hierarchy ensures Paper forks (Purpur, Folia) are properly identified.
+
+## Installation
+
+<Steps>
+  <Step title="Choose the correct JAR">
+    Download the appropriate JAR file for your platform:
+    - **Paper/Purpur/Folia**: Use `bettermodel-paper-VERSION.jar`
+    - **Spigot/Bukkit**: Use `bettermodel-spigot-VERSION.jar`
+    
+    <Warning>
+      Using the wrong JAR will cause the plugin to refuse to load. Paper-based servers **must** use the Paper JAR.
+    </Warning>
+  </Step>
+  
+  <Step title="Install dependencies">
+    BetterModel automatically downloads required libraries at runtime using Libby.
+    
+    For **Paper** platforms, dependencies are loaded via Paper's plugin loader:
+    ```java Paper Loader
+    public final class BetterModelLoader implements PluginLoader {
+        @Override
+        public void classloader(PluginClasspathBuilder classpathBuilder) {
+            var lib = new MavenLibraryResolver();
+            lib.addRepository(new RemoteRepository.Builder(
+                null, "default",
+                "https://maven-central.storage-download.googleapis.com/maven2"
+            ).build());
+            // Libraries loaded from paper-library file
+            classpathBuilder.addLibrary(lib);
+        }
+    }
+    ```
+    
+    For **Spigot**, libraries are declared in `plugin.yml`:
+    ```yaml plugin.yml
+    libraries:
+      - com.vdurmont:semver4j:3.1.0
+      - org.incendo:cloud-core:2.0.0
+      # ... other dependencies
+    ```
+  </Step>
+  
+  <Step title="Place in plugins folder">
+    Copy the JAR to your server's `plugins/` directory and restart.
+  </Step>
+  
+  <Step title="Verify installation">
+    Check console for the load message:
+    ```
+    [BetterModel] Plugin is loaded. (XXX ms)
+    [BetterModel] Minecraft version: 1.21.11, NMS version: v1_21_R7
+    [BetterModel] Platform: Paper
+    ```
+  </Step>
+</Steps>
+
+## Platform-Specific Features
+
+### Paper Advantages
+
+When running on Paper-based platforms, BetterModel gains access to:
+
+<AccordionGroup>
+  <Accordion title="Modern Scheduler API" icon="clock">
+    Paper's async scheduler with better thread safety:
+    
+    ```kotlin Async Scheduling
+    override fun asyncTask(runnable: Runnable) = 
+        Bukkit.getAsyncScheduler().runNow(PLUGIN) {
+            runnable.run()
+        }.wrap()
+    
+    override fun asyncTaskLater(delay: Long, runnable: Runnable) = 
+        Bukkit.getAsyncScheduler().runDelayed(PLUGIN, {
+            runnable.run()
+        }, (delay * 50).coerceAtLeast(1), TimeUnit.MILLISECONDS).wrap()
+    ```
+  </Accordion>
+  
+  <Accordion title="Plugin Loader System" icon="plug">
+    Dependencies loaded before plugin initialization, avoiding classloading issues.
+  </Accordion>
+  
+  <Accordion title="Enhanced Event System" icon="bolt">
+    Access to Paper-specific events for better entity management.
+  </Accordion>
+</AccordionGroup>
+
+### Spigot Limitations
+
+On Spigot/Bukkit platforms:
+
+<Warning>
+  **Spigot Scheduler**: Uses legacy BukkitScheduler API
+  
+  ```kotlin Spigot Scheduler
+  override fun asyncTask(runnable: Runnable) = 
+      Bukkit.getScheduler().runTaskAsynchronously(PLUGIN, runnable).wrap()
+  
+  override fun asyncTaskLater(delay: Long, runnable: Runnable) = 
+      Bukkit.getScheduler().runTaskLaterAsynchronously(
+          PLUGIN, runnable, delay
+      ).wrap()
+  ```
+</Warning>
+
+<Note>
+  Both implementations use the same `ModelTask` interface, ensuring API consistency across platforms.
+</Note>
+
+## Configuration
+
+The plugin creates a `BetterModel/` directory in your plugins folder:
+
+```
+plugins/
+└── BetterModel/
+    ├── config.yml          # Main configuration
+    ├── models/             # .bbmodel files for entities
+    ├── players/            # .bbmodel files for player models
+    └── resource-pack/      # Generated resource pack
+```
+
+### Server Platform in Code
+
+Your plugins can detect the current platform:
+
+```java Detecting Platform
+BetterModelBukkit platform = BetterModelBukkit.platform();
+
+if (BetterModelBukkit.IS_PAPER) {
+    // Paper-specific optimizations
+    platform.scheduler().asyncTask(() -> {
+        // Async work with Paper's scheduler
+    });
+} else {
+    // Fallback to Spigot scheduler
+    platform.scheduler().asyncTask(() -> {
+        // Same API, different implementation
+    });
+}
+```
+
+## API Usage
+
+### Adding the Dependency
+
+<CodeGroup>
+```kotlin Gradle (Kotlin)
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly("io.github.toxicity188:bettermodel-bukkit-api:2.2.0")
+}
+```
+
+```groovy Gradle (Groovy)
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'io.github.toxicity188:bettermodel-bukkit-api:2.2.0'
+}
+```
+
+```xml Maven
+<repositories>
+    <repository>
+        <id>central</id>
+        <url>https://repo.maven.apache.org/maven2</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>io.github.toxicity188</groupId>
+        <artifactId>bettermodel-bukkit-api</artifactId>
+        <version>2.2.0</version>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+```
+</CodeGroup>
+
+### Basic Usage Example
+
+```java Creating Models
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import org.bukkit.entity.Entity;
+
+public class ModelExample {
+    public void spawnModel(Entity entity) {
+        // Create entity tracker
+        EntityTracker tracker = BetterModel.model("demon_knight")
+            .map(renderer -> renderer.getOrCreate(
+                BukkitAdapter.adapt(entity)
+            ))
+            .orElse(null);
+        
+        if (tracker != null) {
+            // Model successfully attached to entity
+            tracker.animate("idle", AnimationModifier.DEFAULT);
+        }
+    }
+}
+```
+
+## Soft Dependencies
+
+BetterModel integrates with popular plugins:
+
+<CardGroup cols={2}>
+  <Card title="MythicMobs" icon="dragon">
+    Custom model mechanics and conditions
+  </Card>
+  <Card title="Citizens" icon="users">
+    NPC model traits and commands
+  </Card>
+  <Card title="SkinsRestorer" icon="shirt">
+    Player skin integration for models
+  </Card>
+  <Card title="Nexo" icon="hammer">
+    Custom item model integration
+  </Card>
+</CardGroup>
+
+These are automatically detected and loaded if present:
+
+```yaml plugin.yml (Spigot)
+softDepend:
+  - MythicMobs
+  - Citizens
+  - SkinsRestorer
+```
+
+```yaml paper-plugin.yml (Paper)
+dependencies:
+  server:
+    MythicMobs:
+      required: false
+      load: BEFORE
+    Citizens:
+      required: false
+      load: BEFORE
+```
+
+## Supported Minecraft Versions
+
+<Info>
+  **Current Support**: Minecraft 1.21 - 1.21.11
+  
+  BetterModel uses NMS (Net Minecraft Server) adapters for each Minecraft version:
+  - `v1_21_R1` through `v1_21_R7` for different 1.21.x releases
+  - Automatically selects the correct adapter at runtime
+</Info>
+
+The plugin will refuse to load on unsupported Minecraft versions.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Wrong JAR file error" icon="triangle-exclamation">
+    **Error**: "You're using Paper, so you have to use Paper jar!"
+    
+    **Solution**: Download the correct JAR from Modrinth:
+    - Paper/Purpur/Folia: `bettermodel-paper-VERSION.jar`
+    - Spigot/Bukkit: `bettermodel-spigot-VERSION.jar`
+    
+    The Spigot version explicitly checks and refuses to load on Paper:
+    ```kotlin Spigot Validation
+    override fun onEnable() {
+        if (IS_PAPER) {
+            warn("You're using Paper, so you have to use Paper jar!")
+            return Bukkit.getPluginManager().disablePlugin(this)
+        }
+        super.onEnable()
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="NMS version mismatch" icon="code">
+    **Error**: "Unsupported Minecraft version"
+    
+    **Solution**: Ensure you're running Minecraft 1.21-1.21.11. The plugin will not load on older or newer versions.
+  </Accordion>
+  
+  <Accordion title="Resource pack not loading" icon="file-zipper">
+    Check your `config.yml` for resource pack settings:
+    ```yaml
+    pack-type: folder  # or 'zip', 'server'
+    ```
+    
+    - `folder`: Generate to plugins/BetterModel/resource-pack/
+    - `zip`: Generate as .zip file
+    - `server`: Use with Paper's built-in resource pack hosting
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Folia Support" icon="layer-group" href="/platforms/folia">
+    Learn about Folia's region-based threading
+  </Card>
+  <Card title="Fabric Platform" icon="cube" href="/platforms/fabric">
+    Explore the Fabric mod implementation
+  </Card>
+  <Card title="API Examples" icon="code" href="/examples/basic-entity-model">
+    See complete API usage examples
+  </Card>
+  <Card title="Installation" icon="gear" href="/installation">
+    Install BetterModel on your server
+  </Card>
+</CardGroup>

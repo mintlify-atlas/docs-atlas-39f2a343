@@ -1,0 +1,409 @@
+---
+title: "BetterModel"
+description: "Main entry point for the BetterModel API"
+---
+
+## Overview
+
+The `BetterModel` class provides static access to the platform instance, configuration, model managers, NMS handlers, and entity registries. It serves as a service provider for interacting with the BetterModel engine.
+
+This is the primary class you'll use to access all BetterModel functionality.
+
+<Info>
+The BetterModel class cannot be instantiated. All methods are static and accessed directly.
+</Info>
+
+## Package
+
+```java
+kr.toxicity.model.api.BetterModel
+```
+
+## Static Methods
+
+### Configuration
+
+#### config()
+
+Returns the platform configuration manager.
+
+```java
+public static @NotNull BetterModelConfig config()
+```
+
+**Returns:** `BetterModelConfig` - The configuration manager
+
+**Since:** 1.15.2
+
+**Example:**
+```java
+BetterModelConfig config = BetterModel.config();
+boolean metricsEnabled = config.metrics();
+```
+
+---
+
+### Model Management
+
+#### model()
+
+Retrieves a model renderer by its name, wrapped in an Optional.
+
+```java
+public static @NotNull Optional<ModelRenderer> model(@NotNull String name)
+```
+
+<ParamField path="name" type="String" required>
+  The name of the model to retrieve
+</ParamField>
+
+**Returns:** `Optional<ModelRenderer>` - An optional containing the renderer if found
+
+**Since:** 1.15.2
+
+**Example:**
+```java
+Optional<ModelRenderer> model = BetterModel.model("my_custom_model");
+model.ifPresent(renderer -> {
+    // Use the model renderer
+});
+```
+
+#### modelOrNull()
+
+Retrieves a model renderer by its name, or null if not found.
+
+```java
+public static @Nullable ModelRenderer modelOrNull(@NotNull String name)
+```
+
+<ParamField path="name" type="String" required>
+  The name of the model to retrieve
+</ParamField>
+
+**Returns:** `ModelRenderer` - The renderer, or null if not found
+
+**Since:** 1.15.2
+
+#### models()
+
+Returns a collection of all loaded model renderers.
+
+```java
+public static @NotNull @Unmodifiable Collection<ModelRenderer> models()
+```
+
+**Returns:** `Collection<ModelRenderer>` - An unmodifiable collection of models
+
+**Since:** 1.15.2
+
+#### modelKeys()
+
+Returns a set of all loaded model names.
+
+```java
+public static @NotNull @Unmodifiable Set<String> modelKeys()
+```
+
+**Returns:** `Set<String>` - An unmodifiable set of model keys
+
+**Since:** 1.15.2
+
+---
+
+### Player Limb Management
+
+#### limb()
+
+Retrieves a player limb renderer by its name, wrapped in an Optional.
+
+```java
+public static @NotNull Optional<ModelRenderer> limb(@NotNull String name)
+```
+
+<ParamField path="name" type="String" required>
+  The name of the limb model to retrieve
+</ParamField>
+
+**Returns:** `Optional<ModelRenderer>` - An optional containing the renderer if found
+
+**Since:** 1.15.2
+
+**Example:**
+```java
+Optional<ModelRenderer> limb = BetterModel.limb("left_arm");
+limb.ifPresent(renderer -> {
+    // Use the limb renderer
+});
+```
+
+#### limbOrNull()
+
+Retrieves a player limb renderer by its name, or null if not found.
+
+```java
+public static @Nullable ModelRenderer limbOrNull(@NotNull String name)
+```
+
+<ParamField path="name" type="String" required>
+  The name of the limb model to retrieve
+</ParamField>
+
+**Returns:** `ModelRenderer` - The renderer, or null if not found
+
+**Since:** 1.15.2
+
+#### limbs()
+
+Returns a collection of all loaded player limb renderers.
+
+```java
+public static @NotNull @Unmodifiable Collection<ModelRenderer> limbs()
+```
+
+**Returns:** `Collection<ModelRenderer>` - An unmodifiable collection of limb models
+
+**Since:** 1.15.2
+
+#### limbKeys()
+
+Returns a set of all loaded player limb model names.
+
+```java
+public static @NotNull @Unmodifiable Set<String> limbKeys()
+```
+
+**Returns:** `Set<String>` - An unmodifiable set of limb keys
+
+**Since:** 1.15.2
+
+---
+
+### Player Management
+
+#### player()
+
+Retrieves a player channel handler by the player's UUID.
+
+```java
+public static @NotNull Optional<PlayerChannelHandler> player(@NotNull UUID uuid)
+```
+
+<ParamField path="uuid" type="UUID" required>
+  The player's unique identifier
+</ParamField>
+
+**Returns:** `Optional<PlayerChannelHandler>` - An optional containing the channel handler if found
+
+**Since:** 1.15.2
+
+**Example:**
+```java
+UUID playerUuid = player.getUniqueId();
+Optional<PlayerChannelHandler> handler = BetterModel.player(playerUuid);
+handler.ifPresent(ch -> {
+    // Use the channel handler
+});
+```
+
+---
+
+### Entity Registry Management
+
+#### registry(UUID)
+
+Retrieves an entity tracker registry by the entity's UUID.
+
+```java
+public static @NotNull Optional<EntityTrackerRegistry> registry(@NotNull UUID uuid)
+```
+
+<ParamField path="uuid" type="UUID" required>
+  The entity's unique identifier
+</ParamField>
+
+**Returns:** `Optional<EntityTrackerRegistry>` - An optional containing the registry if found
+
+**Since:** 1.15.2
+
+#### registry(PlatformEntity)
+
+Retrieves an entity tracker registry for a platform entity.
+
+```java
+public static @NotNull Optional<EntityTrackerRegistry> registry(@NotNull PlatformEntity entity)
+```
+
+<ParamField path="entity" type="PlatformEntity" required>
+  The platform entity (e.g., Bukkit entity)
+</ParamField>
+
+**Returns:** `Optional<EntityTrackerRegistry>` - An optional containing the registry if found
+
+**Since:** 1.15.2
+
+#### registry(BaseEntity)
+
+Retrieves an entity tracker registry for a base entity.
+
+```java
+public static @NotNull Optional<EntityTrackerRegistry> registry(@NotNull BaseEntity entity)
+```
+
+<ParamField path="entity" type="BaseEntity" required>
+  The base entity
+</ParamField>
+
+**Returns:** `Optional<EntityTrackerRegistry>` - An optional containing the registry if found
+
+**Since:** 1.15.2
+
+#### registryOrNull(UUID)
+
+Retrieves an entity tracker registry by the entity's UUID, or null if not found.
+
+```java
+public static @Nullable EntityTrackerRegistry registryOrNull(@NotNull UUID uuid)
+```
+
+<ParamField path="uuid" type="UUID" required>
+  The entity's unique identifier
+</ParamField>
+
+**Returns:** `EntityTrackerRegistry` - The registry, or null if not found
+
+**Since:** 1.15.2
+
+#### registryOrNull(PlatformEntity)
+
+Retrieves an entity tracker registry for a platform entity, or null if not found.
+
+```java
+public static @Nullable EntityTrackerRegistry registryOrNull(@NotNull PlatformEntity entity)
+```
+
+<ParamField path="entity" type="PlatformEntity" required>
+  The platform entity (e.g., Bukkit entity)
+</ParamField>
+
+**Returns:** `EntityTrackerRegistry` - The registry, or null if not found
+
+**Since:** 1.15.2
+
+#### registryOrNull(BaseEntity)
+
+Retrieves an entity tracker registry for a base entity, or null if not found.
+
+```java
+public static @Nullable EntityTrackerRegistry registryOrNull(@NotNull BaseEntity entity)
+```
+
+<ParamField path="entity" type="BaseEntity" required>
+  The base entity
+</ParamField>
+
+**Returns:** `EntityTrackerRegistry` - The registry, or null if not found
+
+**Since:** 1.15.2
+
+**Example:**
+```java
+EntityTrackerRegistry registry = BetterModel.registryOrNull(entity.getUniqueId());
+if (registry != null) {
+    // Use the registry
+}
+```
+
+---
+
+### Platform Access
+
+#### platform()
+
+Returns the singleton instance of the BetterModel platform.
+
+```java
+public static @NotNull BetterModelPlatform platform()
+```
+
+**Returns:** `BetterModelPlatform` - The platform instance
+
+**Throws:** `NullPointerException` - If the platform has not been initialized
+
+**Since:** 2.0.0
+
+**Example:**
+```java
+BetterModelPlatform platform = BetterModel.platform();
+ModelManager modelManager = platform.modelManager();
+```
+
+#### nms()
+
+Returns the NMS handler instance for version-specific operations.
+
+```java
+public static @NotNull NMS nms()
+```
+
+**Returns:** `NMS` - The NMS handler
+
+**Since:** 1.15.2
+
+#### eventBus()
+
+Returns the event bus for registering and handling events.
+
+```java
+public static @NotNull BetterModelEventBus eventBus()
+```
+
+**Returns:** `BetterModelEventBus` - The event bus
+
+**Since:** 2.0.0
+
+---
+
+## Complete Example
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.data.renderer.ModelRenderer;
+import kr.toxicity.model.api.tracker.EntityTrackerRegistry;
+import org.bukkit.entity.Entity;
+
+public class ModelExample {
+    
+    public void applyCustomModel(Entity entity, String modelName) {
+        // Get the model renderer
+        Optional<ModelRenderer> model = BetterModel.model(modelName);
+        
+        if (model.isEmpty()) {
+            System.out.println("Model not found: " + modelName);
+            return;
+        }
+        
+        // Get the entity's tracker registry
+        Optional<EntityTrackerRegistry> registry = BetterModel.registry(entity.getUniqueId());
+        
+        registry.ifPresent(reg -> {
+            // Apply the model to the entity
+            // (specific implementation depends on your use case)
+            System.out.println("Applied model to entity");
+        });
+    }
+    
+    public void listAllModels() {
+        // Get all model names
+        Set<String> modelKeys = BetterModel.modelKeys();
+        
+        System.out.println("Loaded models:");
+        modelKeys.forEach(key -> System.out.println("- " + key));
+    }
+}
+```
+
+## See Also
+
+- [BetterModelPlatform](/api/bettermodel-platform) - Platform interface
+- [BetterModelConfig](/api/bettermodel-config) - Configuration interface

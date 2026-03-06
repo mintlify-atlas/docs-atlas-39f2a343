@@ -1,0 +1,318 @@
+---
+title: ModelProfile
+description: Represents a model's skin profile with player information
+---
+
+## Overview
+
+The `ModelProfile` interface represents a model's skin profile, containing player information and skin data. It provides methods for creating, retrieving, and managing player profiles both synchronously and asynchronously.
+
+## Interface Definition
+
+```java
+public interface ModelProfile
+```
+
+## Constants
+
+### UNKNOWN
+
+```java
+ModelProfile UNKNOWN
+```
+
+An unknown skin profile used as a fallback when profile information is unavailable.
+
+## Core Methods
+
+### info()
+
+Gets the profile information.
+
+```java
+@NotNull ModelProfileInfo info()
+```
+
+**Returns:** The profile information (player UUID, name, etc.)
+
+### skin()
+
+Gets the skin data.
+
+```java
+@NotNull ModelProfileSkin skin()
+```
+
+**Returns:** The skin textures and properties
+
+### player()
+
+Gets the online player associated with this profile.
+
+```java
+default @Nullable PlatformPlayer player()
+```
+
+**Returns:** The online player, or null if offline
+
+### asUncompleted()
+
+Converts this profile to an uncompleted profile for async operations.
+
+```java
+default @NotNull Uncompleted asUncompleted()
+```
+
+**Returns:** An uncompleted profile wrapper
+
+## Static Factory Methods
+
+### of(ModelProfileInfo)
+
+Creates a profile with the given information and empty skin.
+
+```java
+static @NotNull ModelProfile of(@NotNull ModelProfileInfo info)
+```
+
+**Parameters:**
+- `info` - The profile information
+
+**Returns:** A new model profile
+
+**Example:**
+```java
+ModelProfileInfo info = // ... get profile info
+ModelProfile profile = ModelProfile.of(info);
+```
+
+### of(ModelProfileInfo, ModelProfileSkin)
+
+Creates a profile with the given information and skin.
+
+```java
+static @NotNull ModelProfile of(
+    @NotNull ModelProfileInfo info,
+    @NotNull ModelProfileSkin skin
+)
+```
+
+**Parameters:**
+- `info` - The profile information
+- `skin` - The skin data
+
+**Returns:** A new model profile
+
+**Example:**
+```java
+ModelProfileInfo info = // ... get profile info
+ModelProfileSkin skin = // ... get skin data
+ModelProfile profile = ModelProfile.of(info, skin);
+```
+
+### of(PlatformPlayer)
+
+Gets the profile for an online player.
+
+```java
+static @NotNull ModelProfile of(@NotNull PlatformPlayer player)
+```
+
+**Parameters:**
+- `player` - The online player
+
+**Returns:** The player's model profile
+
+**Example:**
+```java
+PlatformPlayer player = // ... get player
+ModelProfile profile = ModelProfile.of(player);
+```
+
+### of(PlatformOfflinePlayer)
+
+Gets an uncompleted profile for an offline player.
+
+```java
+static @NotNull Uncompleted of(@NotNull PlatformOfflinePlayer offlinePlayer)
+```
+
+**Parameters:**
+- `offlinePlayer` - The offline player
+
+**Returns:** An uncompleted profile that can be resolved asynchronously
+
+**Example:**
+```java
+PlatformOfflinePlayer offlinePlayer = // ... get offline player
+ModelProfile.Uncompleted uncompleted = ModelProfile.of(offlinePlayer);
+CompletableFuture<ModelProfile> future = uncompleted.complete();
+```
+
+### of(UUID)
+
+Gets an uncompleted profile by player UUID.
+
+```java
+static @NotNull Uncompleted of(@NotNull UUID uuid)
+```
+
+**Parameters:**
+- `uuid` - The player's UUID
+
+**Returns:** An uncompleted profile that can be resolved asynchronously
+
+**Example:**
+```java
+UUID playerUuid = UUID.fromString("...");
+ModelProfile.Uncompleted uncompleted = ModelProfile.of(playerUuid);
+uncompleted.complete().thenAccept(profile -> {
+    // Use completed profile
+});
+```
+
+## Nested Types
+
+### Simple
+
+A simple record implementation of ModelProfile.
+
+```java
+record Simple(
+    @NotNull ModelProfileInfo info,
+    @NotNull ModelProfileSkin skin
+) implements ModelProfile
+```
+
+### Uncompleted
+
+Represents a profile that needs to be completed asynchronously, typically for offline players or delayed skin fetching.
+
+```java
+interface Uncompleted {
+    @NotNull ModelProfileInfo info();
+    @NotNull CompletableFuture<ModelProfile> complete();
+    default @NotNull ModelProfile fallback();
+}
+```
+
+#### Methods
+
+**info()** - Gets the available profile information
+
+**complete()** - Asynchronously completes the profile by fetching skin data
+
+**fallback()** - Returns a fallback profile without waiting for completion
+
+## Usage Examples
+
+### Basic Profile Creation
+
+```java
+import kr.toxicity.model.api.profile.ModelProfile;
+import kr.toxicity.model.api.platform.PlatformPlayer;
+
+// Get profile from online player
+PlatformPlayer player = // ... get player
+ModelProfile profile = ModelProfile.of(player);
+
+// Access profile data
+ModelProfileInfo info = profile.info();
+ModelProfileSkin skin = profile.skin();
+
+UUID playerId = info.id();
+String playerName = info.name();
+```
+
+### Async Profile Loading
+
+```java
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+
+// Load profile for offline player
+UUID playerUuid = UUID.fromString("...");
+ModelProfile.Uncompleted uncompleted = ModelProfile.of(playerUuid);
+
+// Get fallback immediately
+ModelProfile fallback = uncompleted.fallback();
+
+// Or wait for complete profile
+uncompleted.complete().thenAccept(profile -> {
+    // Profile is now fully loaded with skin data
+    ModelProfileSkin skin = profile.skin();
+    // Use the profile
+}).exceptionally(error -> {
+    // Handle error
+    return null;
+});
+```
+
+### Creating Custom Profiles
+
+```java
+import kr.toxicity.model.api.profile.ModelProfileInfo;
+import kr.toxicity.model.api.profile.ModelProfileSkin;
+
+// Create custom profile info
+ModelProfileInfo info = // ... create or get info
+
+// Create profile with empty skin
+ModelProfile profileWithoutSkin = ModelProfile.of(info);
+
+// Or with custom skin
+ModelProfileSkin customSkin = // ... create or get skin
+ModelProfile profileWithSkin = ModelProfile.of(info, customSkin);
+```
+
+### Checking Player Status
+
+```java
+ModelProfile profile = // ... get profile
+
+// Check if player is online
+PlatformPlayer player = profile.player();
+if (player != null) {
+    // Player is online
+    player.sendMessage("Hello!");
+} else {
+    // Player is offline
+    ModelProfile.Uncompleted uncompleted = profile.asUncompleted();
+    // Can still access basic info
+    UUID playerId = uncompleted.info().id();
+}
+```
+
+### Working with Unknown Profiles
+
+```java
+// Use UNKNOWN constant as fallback
+ModelProfile profile = getProfileOrNull();
+if (profile == null) {
+    profile = ModelProfile.UNKNOWN;
+}
+
+// Safe to use - will have default/empty values
+ModelProfileSkin skin = profile.skin();
+```
+
+## Profile Resolution Flow
+
+1. **Online Player**: `ModelProfile.of(PlatformPlayer)` returns immediate profile with full data
+2. **Offline Player**: `ModelProfile.of(UUID)` returns `Uncompleted` profile
+3. **Fallback**: Call `fallback()` for immediate partial data
+4. **Complete**: Call `complete()` for async full profile fetch
+5. **Unknown**: Use `ModelProfile.UNKNOWN` when no data is available
+
+## Thread Safety
+
+Profile operations are designed to be thread-safe:
+- Synchronous methods (`of(PlatformPlayer)`) are safe for main thread
+- Async methods (`complete()`) handle profile fetching on background threads
+- The `Uncompleted` interface provides both immediate and async access patterns
+
+## See Also
+
+- [ModelProfileInfo](/api/model-profile-info) - Profile information structure
+- [ModelProfileSkin](/api/model-profile-skin) - Skin texture data
+- [PlatformPlayer](/api/platform-player) - Platform player abstraction

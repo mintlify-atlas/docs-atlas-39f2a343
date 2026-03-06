@@ -1,0 +1,506 @@
+---
+title: "BetterModelPlatform"
+description: "Main platform interface for BetterModel"
+---
+
+## Overview
+
+The `BetterModelPlatform` interface represents the core platform abstraction for BetterModel. It provides access to configuration, managers, schedulers, and lifecycle operations like reloading.
+
+You typically access this interface through `BetterModel.platform()`.
+
+## Package
+
+```java
+kr.toxicity.model.api.BetterModelPlatform
+```
+
+## Methods
+
+### Platform Information
+
+#### dataFolder()
+
+Returns the data folder for the BetterModel plugin where configuration files, data files, and other plugin-specific resources are stored.
+
+```java
+@NotNull File dataFolder()
+```
+
+**Returns:** `File` - The data folder as a File object
+
+**Since:** 2.0.0
+
+#### jarType()
+
+Returns the type of JAR file this platform is running on (e.g., SPIGOT, PAPER, FABRIC).
+
+```java
+@NotNull JarType jarType()
+```
+
+**Returns:** `JarType` - The JAR type enum representing the platform
+
+**Since:** 2.0.0
+
+**Example:**
+```java
+BetterModelPlatform platform = BetterModel.platform();
+JarType type = platform.jarType();
+if (type == JarType.PAPER) {
+    // Paper-specific logic
+}
+```
+
+#### isSnapshot()
+
+Checks if the running version of BetterModel is a snapshot build.
+
+```java
+boolean isSnapshot()
+```
+
+**Returns:** `boolean` - True if snapshot, false otherwise
+
+**Since:** 1.15.2
+
+#### version()
+
+Returns the Minecraft version of the running server.
+
+```java
+@NotNull MinecraftVersion version()
+```
+
+**Returns:** `MinecraftVersion` - The Minecraft version
+
+**Since:** 1.15.2
+
+#### semver()
+
+Returns the semantic version of the platform.
+
+```java
+@NotNull Semver semver()
+```
+
+**Returns:** `Semver` - The semantic version
+
+**Since:** 1.15.2
+
+---
+
+### Configuration & Managers
+
+#### config()
+
+Returns the platform's configuration manager.
+
+```java
+@NotNull BetterModelConfig config()
+```
+
+**Returns:** `BetterModelConfig` - The configuration
+
+**Since:** 1.15.2
+
+#### modelManager()
+
+Returns the model manager for accessing and managing model renderers.
+
+```java
+@NotNull ModelManager modelManager()
+```
+
+**Returns:** `ModelManager` - The model manager
+
+**Since:** 1.15.2
+
+#### playerManager()
+
+Returns the player manager for handling player-specific operations.
+
+```java
+@NotNull PlayerManager playerManager()
+```
+
+**Returns:** `PlayerManager` - The player manager
+
+**Since:** 1.15.2
+
+#### scriptManager()
+
+Returns the script manager for handling scripting operations.
+
+```java
+@NotNull ScriptManager scriptManager()
+```
+
+**Returns:** `ScriptManager` - The script manager
+
+**Since:** 1.15.2
+
+#### skinManager()
+
+Returns the skin manager for handling entity skins.
+
+```java
+@NotNull SkinManager skinManager()
+```
+
+**Returns:** `SkinManager` - The skin manager
+
+**Since:** 1.15.2
+
+#### profileManager()
+
+Returns the profile manager.
+
+```java
+@NotNull ProfileManager profileManager()
+```
+
+**Returns:** `ProfileManager` - The profile manager
+
+**Since:** 1.15.2
+
+#### scheduler()
+
+Returns the platform's scheduler for task scheduling.
+
+```java
+@NotNull ModelScheduler scheduler()
+```
+
+**Returns:** `ModelScheduler` - The scheduler
+
+**Since:** 1.15.2
+
+#### adapter()
+
+Returns the platform's adapter for platform-specific operations.
+
+```java
+@NotNull PlatformAdapter adapter()
+```
+
+**Returns:** `PlatformAdapter` - The adapter
+
+---
+
+### NMS & Low-Level Access
+
+#### nms()
+
+Returns the NMS (Net.Minecraft.Server) handler for version-specific operations.
+
+```java
+@NotNull NMS nms()
+```
+
+**Returns:** `NMS` - The NMS handler
+
+**Since:** 1.15.2
+
+---
+
+### Utilities
+
+#### logger()
+
+Returns the platform's logger.
+
+```java
+@NotNull BetterModelLogger logger()
+```
+
+**Returns:** `BetterModelLogger` - The logger
+
+**Since:** 1.15.2
+
+#### evaluator()
+
+Returns the expression evaluator for evaluating dynamic expressions.
+
+```java
+@NotNull BetterModelEvaluator evaluator()
+```
+
+**Returns:** `BetterModelEvaluator` - The evaluator
+
+**Since:** 1.15.2
+
+#### eventBus()
+
+Returns the event bus for registering and handling events.
+
+```java
+@NotNull BetterModelEventBus eventBus()
+```
+
+**Returns:** `BetterModelEventBus` - The event bus
+
+**Since:** 2.0.0
+
+#### getResource()
+
+Retrieves a resource from the platform's JAR file.
+
+```java
+@Nullable InputStream getResource(@NotNull String path)
+```
+
+<ParamField path="path" type="String" required>
+  The path to the resource
+</ParamField>
+
+**Returns:** `InputStream` - An input stream for the resource, or null if not found
+
+**Since:** 1.15.2
+
+---
+
+### Reload Operations
+
+#### reload()
+
+Reloads the platform with default settings (console sender).
+
+```java
+default @NotNull ReloadResult reload()
+```
+
+**Returns:** `ReloadResult` - The result of the reload operation
+
+**Since:** 2.0.0
+
+#### reload(Audience)
+
+Reloads the platform, specifying the command sender who initiated it.
+
+```java
+default @NotNull ReloadResult reload(@NotNull Audience sender)
+```
+
+<ParamField path="sender" type="Audience" required>
+  The command sender who initiated the reload
+</ParamField>
+
+**Returns:** `ReloadResult` - The result of the reload operation
+
+**Since:** 1.15.2
+
+#### reload(ReloadInfo)
+
+Reloads the platform with specific reload information.
+
+```java
+@NotNull ReloadResult reload(@NotNull ReloadInfo info)
+```
+
+<ParamField path="info" type="ReloadInfo" required>
+  The reload configuration
+</ParamField>
+
+**Returns:** `ReloadResult` - The result of the reload operation
+
+**Since:** 1.15.2
+
+**Example:**
+```java
+BetterModelPlatform platform = BetterModel.platform();
+ReloadResult result = platform.reload();
+
+if (result instanceof ReloadResult.Success success) {
+    long totalTime = success.totalTime();
+    System.out.println("Reload completed in " + totalTime + "ms");
+} else if (result instanceof ReloadResult.Failure failure) {
+    System.err.println("Reload failed: " + failure.throwable().getMessage());
+}
+```
+
+#### addReloadStartHandler()
+
+Registers a handler to be executed when a reload starts.
+
+```java
+void addReloadStartHandler(@NotNull Consumer<PackZipper> consumer)
+```
+
+<ParamField path="consumer" type="Consumer<PackZipper>" required>
+  The handler, receiving the PackZipper
+</ParamField>
+
+**Since:** 1.15.2
+
+#### addReloadEndHandler()
+
+Registers a handler to be executed when a reload ends.
+
+```java
+void addReloadEndHandler(@NotNull Consumer<ReloadResult> consumer)
+```
+
+<ParamField path="consumer" type="Consumer<ReloadResult>" required>
+  The handler, receiving the ReloadResult
+</ParamField>
+
+**Since:** 1.15.2
+
+---
+
+## Nested Types
+
+### ReloadResult
+
+Represents the outcome of a platform reload operation.
+
+#### ReloadResult.Success
+
+Indicates a successful reload.
+
+```java
+record Success(
+    boolean firstLoad,
+    long assetsTime,
+    @NotNull PackResult packResult
+) implements ReloadResult
+```
+
+<ParamField path="firstLoad" type="boolean">
+  True if this is the first load (startup), false otherwise
+</ParamField>
+
+<ParamField path="assetsTime" type="long">
+  The time taken to reload assets in milliseconds
+</ParamField>
+
+<ParamField path="packResult" type="PackResult">
+  The result of the resource pack generation
+</ParamField>
+
+**Methods:**
+- `packingTime()` - Returns the time taken to generate the resource pack
+- `totalTime()` - Returns the total time taken for the reload operation
+- `length()` - Returns the size of the generated resource pack in bytes
+
+**Since:** 1.15.2
+
+#### ReloadResult.OnReload
+
+Indicates that a reload is currently in progress.
+
+```java
+enum OnReload implements ReloadResult {
+    INSTANCE
+}
+```
+
+**Since:** 1.15.2
+
+#### ReloadResult.Failure
+
+Indicates a failed reload.
+
+```java
+record Failure(@NotNull Throwable throwable) implements ReloadResult
+```
+
+<ParamField path="throwable" type="Throwable">
+  The exception that caused the failure
+</ParamField>
+
+**Since:** 1.15.2
+
+---
+
+### JarType
+
+Represents the type of JAR file the platform is running on.
+
+```java
+enum JarType {
+    SPIGOT("spigot"),
+    PAPER("paper"),
+    FABRIC("fabric")
+}
+```
+
+**Values:**
+- `SPIGOT` - Indicates a Spigot-based server
+- `PAPER` - Indicates a Paper-based server
+- `FABRIC` - Indicates a Fabric-based server
+
+**Methods:**
+- `raw()` - Returns the raw string representation (e.g., "spigot", "paper", "fabric")
+
+**Since:** 2.0.0
+
+---
+
+## Complete Example
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.BetterModelPlatform;
+import kr.toxicity.model.api.manager.ModelManager;
+import net.kyori.adventure.audience.Audience;
+
+public class PlatformExample {
+    
+    public void performReload(Audience sender) {
+        BetterModelPlatform platform = BetterModel.platform();
+        
+        // Reload with sender
+        ReloadResult result = platform.reload(sender);
+        
+        switch (result) {
+            case ReloadResult.Success success -> {
+                long totalTime = success.totalTime();
+                long packSize = success.length();
+                System.out.println(String.format(
+                    "Reload completed in %dms, pack size: %d bytes",
+                    totalTime, packSize
+                ));
+            }
+            case ReloadResult.OnReload ignored -> {
+                System.out.println("A reload is already in progress");
+            }
+            case ReloadResult.Failure failure -> {
+                System.err.println("Reload failed: " + failure.throwable().getMessage());
+            }
+        }
+    }
+    
+    public void getPlatformInfo() {
+        BetterModelPlatform platform = BetterModel.platform();
+        
+        System.out.println("Platform Type: " + platform.jarType().raw());
+        System.out.println("Minecraft Version: " + platform.version());
+        System.out.println("BetterModel Version: " + platform.semver());
+        System.out.println("Is Snapshot: " + platform.isSnapshot());
+        System.out.println("Data Folder: " + platform.dataFolder().getAbsolutePath());
+    }
+    
+    public void registerReloadHandlers() {
+        BetterModelPlatform platform = BetterModel.platform();
+        
+        // Register start handler
+        platform.addReloadStartHandler(zipper -> {
+            System.out.println("Reload starting...");
+        });
+        
+        // Register end handler
+        platform.addReloadEndHandler(result -> {
+            if (result instanceof ReloadResult.Success) {
+                System.out.println("Reload completed successfully");
+            }
+        });
+    }
+}
+```
+
+## See Also
+
+- [BetterModel](/api/bettermodel) - Main API entry point
+- [BetterModelConfig](/api/bettermodel-config) - Configuration interface

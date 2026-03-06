@@ -1,0 +1,565 @@
+---
+title: "TrackerUpdateAction"
+description: "Actions for updating rendered bone display properties"
+---
+
+## Overview
+
+The `TrackerUpdateAction` sealed interface represents an action that updates the state of a `RenderedBone`. Actions can modify display properties like brightness, glow, item stack, billboard mode, and more. They are applied to bones matching a specific predicate.
+
+**Package:** `kr.toxicity.model.api.tracker`
+
+**Since:** 1.15.2
+
+## Interface Methods
+
+### test
+```java
+boolean test(@NotNull RenderedBone bone, @NotNull BonePredicate predicate)
+```
+Applies the action to a bone if it matches the predicate.
+
+**Parameters:**
+- `bone` - The target bone
+- `predicate` - The predicate to check against
+
+**Returns:** `true` if the bone was updated
+
+### then
+```java
+default @NotNull TrackerUpdateAction then(@NotNull TrackerUpdateAction action)
+```
+Chains this action with another action.
+
+**Parameters:**
+- `action` - The next action
+
+**Returns:** The combined action
+
+### stream
+```java
+default @NotNull Stream<TrackerUpdateAction> stream()
+```
+Returns a stream of actions (useful for flattening composites).
+
+**Returns:** The stream of actions
+
+## Factory Methods
+
+### brightness
+```java
+static @NotNull Brightness brightness(int block, int sky)
+```
+Creates an action to update display brightness.
+
+**Parameters:**
+- `block` - The block light level (0-15)
+- `sky` - The skylight level (0-15)
+
+**Returns:** The brightness action
+
+### glow
+```java
+static @NotNull Glow glow(boolean glow)
+```
+Creates an action to toggle the glowing effect.
+
+**Parameters:**
+- `glow` - `true` to enable glow
+
+**Returns:** The glow action
+
+### glowColor
+```java
+static @NotNull GlowColor glowColor(int glowColor)
+```
+Creates an action to set the glow color.
+
+**Parameters:**
+- `glowColor` - The RGB glow color (hex format)
+
+**Returns:** The glow color action
+
+### viewRange
+```java
+static @NotNull ViewRange viewRange(float viewRange)
+```
+Creates an action to set the view range.
+
+**Parameters:**
+- `viewRange` - The view range in blocks
+
+**Returns:** The view range action
+
+### tint
+```java
+static @NotNull Tint tint(int rgb)
+```
+Creates an action to apply a tint color.
+
+**Parameters:**
+- `rgb` - The RGB tint color (hex format)
+
+**Returns:** The tint action
+
+### previousTint
+```java
+static @NotNull PreviousTint previousTint()
+```
+Creates an action to revert to the previous tint.
+
+**Returns:** The previous tint action
+
+### enchant
+```java
+static @NotNull Enchant enchant(boolean enchant)
+```
+Creates an action to toggle the enchanted glint effect.
+
+**Parameters:**
+- `enchant` - `true` to enable glint
+
+**Returns:** The enchant action
+
+### togglePart
+```java
+static @NotNull TogglePart togglePart(boolean toggle)
+```
+Creates an action to toggle the visibility of a part.
+
+**Parameters:**
+- `toggle` - `true` to show, `false` to hide
+
+**Returns:** The toggle part action
+
+### itemStack
+```java
+static @NotNull ItemStack itemStack(@NotNull TransformedItemStack itemStack)
+```
+Creates an action to update the displayed item stack.
+
+**Parameters:**
+- `itemStack` - The new item stack
+
+**Returns:** The item stack action
+
+### billboard
+```java
+static @NotNull Billboard billboard(@NotNull PlatformBillboard billboard)
+```
+Creates an action to set the billboard constraint.
+
+**Parameters:**
+- `billboard` - The billboard type (FIXED, VERTICAL, HORIZONTAL, CENTER)
+
+**Returns:** The billboard action
+
+### itemMapping
+```java
+static @NotNull ItemMapping itemMapping()
+```
+Creates an action to update the item mapping.
+
+**Returns:** The item mapping action
+
+### moveDuration
+```java
+static @NotNull MoveDuration moveDuration(int moveDuration)
+```
+Creates an action to set the movement interpolation duration.
+
+**Parameters:**
+- `moveDuration` - The duration in ticks
+
+**Returns:** The move duration action
+
+### composite
+```java
+static @NotNull TrackerUpdateAction composite(@NotNull TrackerUpdateAction... actions)
+```
+Combines multiple actions into a single composite action.
+
+**Parameters:**
+- `actions` - The actions to combine
+
+**Returns:** The composite action
+
+### perBone
+```java
+static @NotNull PerBone perBone(@NotNull Function<RenderedBone, TrackerUpdateAction> builder)
+```
+Creates an action that generates a specific action for each bone.
+
+**Parameters:**
+- `builder` - The function to generate actions
+
+**Returns:** The per-bone action
+
+### none
+```java
+static @NotNull None none()
+```
+Returns a no-op action.
+
+**Returns:** The none action
+
+## Action Types
+
+### Brightness
+```java
+record Brightness(int block, int sky)
+```
+Updates the display brightness (light levels).
+
+### Glow
+```java
+enum Glow { TRUE, FALSE }
+```
+Toggles the glowing effect.
+
+### GlowColor
+```java
+record GlowColor(int glowColor)
+```
+Sets the glow color (RGB hex).
+
+### ViewRange
+```java
+record ViewRange(float viewRange)
+```
+Sets the view range in blocks.
+
+### Enchant
+```java
+enum Enchant { TRUE, FALSE }
+```
+Toggles the enchantment glint effect.
+
+### Tint
+```java
+record Tint(int rgb)
+```
+Applies a color tint (RGB hex).
+
+### PreviousTint
+```java
+enum PreviousTint { INSTANCE }
+```
+Reverts to the previous tint.
+
+### TogglePart
+```java
+enum TogglePart { TRUE, FALSE }
+```
+Toggles part visibility (show/hide).
+
+### ItemStack
+```java
+record ItemStack(@NotNull TransformedItemStack itemStack)
+```
+Updates the displayed item stack.
+
+### Billboard
+```java
+record Billboard(@NotNull PlatformBillboard billboard)
+```
+Sets the billboard constraint mode.
+
+### ItemMapping
+```java
+enum ItemMapping { INSTANCE }
+```
+Updates the item mapping.
+
+### MoveDuration
+```java
+record MoveDuration(int moveDuration)
+```
+Sets movement interpolation duration.
+
+### Composite
+```java
+record Composite(@NotNull @Unmodifiable List<TrackerUpdateAction> actions)
+```
+Combines multiple actions.
+
+### PerBone
+```java
+record PerBone(@NotNull Function<RenderedBone, TrackerUpdateAction> builder)
+```
+Generates dynamic actions per bone.
+
+### None
+```java
+enum None { INSTANCE }
+```
+No-op action.
+
+## Usage Examples
+
+### Basic Updates
+
+```java
+import kr.toxicity.model.api.tracker.Tracker;
+import kr.toxicity.model.api.tracker.TrackerUpdateAction;
+
+Tracker tracker = ...;
+
+// Set brightness to full
+tracker.update(TrackerUpdateAction.brightness(15, 15));
+
+// Enable glow effect
+tracker.update(TrackerUpdateAction.glow(true));
+
+// Set glow color to red
+tracker.update(TrackerUpdateAction.glowColor(0xFF0000));
+
+// Apply red tint
+tracker.update(TrackerUpdateAction.tint(0xFF0000));
+
+// Remove tint
+tracker.update(TrackerUpdateAction.previousTint());
+
+// Enable enchant glint
+tracker.update(TrackerUpdateAction.enchant(true));
+
+// Hide part
+tracker.update(TrackerUpdateAction.togglePart(false));
+```
+
+### Filtered Updates
+
+```java
+import kr.toxicity.model.api.util.function.BonePredicate;
+
+// Update specific bones
+tracker.update(
+    TrackerUpdateAction.glow(true),
+    BonePredicate.name("weapon")
+);
+
+// Update bones with tag
+tracker.update(
+    TrackerUpdateAction.brightness(15, 15),
+    BonePredicate.tag("glowing_part")
+);
+
+// Update using custom predicate
+tracker.update(
+    TrackerUpdateAction.tint(0x00FF00),
+    bone -> bone.name().toString().contains("armor")
+);
+```
+
+### Composite Actions
+
+```java
+// Combine multiple actions
+TrackerUpdateAction action = TrackerUpdateAction.composite(
+    TrackerUpdateAction.glow(true),
+    TrackerUpdateAction.glowColor(0xFF0000),
+    TrackerUpdateAction.brightness(15, 15)
+);
+
+tracker.update(action);
+
+// Chain actions using then()
+TrackerUpdateAction chained = TrackerUpdateAction.glow(true)
+    .then(TrackerUpdateAction.glowColor(0xFF0000))
+    .then(TrackerUpdateAction.brightness(15, 15));
+
+tracker.update(chained);
+```
+
+### Per-Bone Dynamic Actions
+
+```java
+// Different action for each bone
+TrackerUpdateAction perBone = TrackerUpdateAction.perBone(bone -> {
+    String name = bone.name().toString();
+    
+    if (name.contains("weapon")) {
+        return TrackerUpdateAction.glow(true);
+    } else if (name.contains("armor")) {
+        return TrackerUpdateAction.tint(0x0000FF);
+    } else {
+        return TrackerUpdateAction.none();
+    }
+});
+
+tracker.update(perBone);
+```
+
+### Billboard Modes
+
+```java
+import kr.toxicity.model.api.platform.PlatformBillboard;
+
+// Make bone always face player
+tracker.update(
+    TrackerUpdateAction.billboard(PlatformBillboard.CENTER),
+    BonePredicate.name("nameplate")
+);
+
+// Vertical billboard (rotates on Y axis only)
+tracker.update(
+    TrackerUpdateAction.billboard(PlatformBillboard.VERTICAL),
+    BonePredicate.name("healthbar")
+);
+```
+
+### Item Stack Updates
+
+```java
+import kr.toxicity.model.api.util.TransformedItemStack;
+
+// Change displayed item
+TransformedItemStack newItem = TransformedItemStack.of(
+    Material.DIAMOND_SWORD,
+    1
+);
+
+tracker.update(
+    TrackerUpdateAction.itemStack(newItem),
+    BonePredicate.name("weapon_bone")
+);
+```
+
+### Movement Interpolation
+
+```java
+// Smooth movement (10 ticks interpolation)
+tracker.update(TrackerUpdateAction.moveDuration(10));
+
+// Instant movement (no interpolation)
+tracker.update(TrackerUpdateAction.moveDuration(0));
+
+// Slower movement (20 ticks)
+tracker.update(TrackerUpdateAction.moveDuration(20));
+```
+
+### Visibility Control
+
+```java
+// Hide specific parts
+tracker.update(
+    TrackerUpdateAction.togglePart(false),
+    BonePredicate.name("helmet")
+);
+
+// Show all parts
+tracker.update(
+    TrackerUpdateAction.togglePart(true),
+    BonePredicate.TRUE
+);
+```
+
+### View Range Control
+
+```java
+// Increase view range for important model
+tracker.update(TrackerUpdateAction.viewRange(128.0F));
+
+// Decrease view range for detail model
+tracker.update(TrackerUpdateAction.viewRange(32.0F));
+```
+
+## Advanced Examples
+
+### Damage Effect
+
+```java
+public void applyDamageEffect(Tracker tracker) {
+    // Red tint + glow effect
+    TrackerUpdateAction damageEffect = TrackerUpdateAction.composite(
+        TrackerUpdateAction.tint(0xFF0000),
+        TrackerUpdateAction.glow(true),
+        TrackerUpdateAction.glowColor(0xFF0000)
+    );
+    
+    tracker.update(damageEffect);
+    
+    // Revert after 10 ticks
+    scheduler.runLater(() -> {
+        TrackerUpdateAction revert = TrackerUpdateAction.composite(
+            TrackerUpdateAction.previousTint(),
+            TrackerUpdateAction.glow(false)
+        );
+        tracker.update(revert);
+    }, 10);
+}
+```
+
+### Glowing Outline
+
+```java
+public void addGlowingOutline(Tracker tracker, int color) {
+    tracker.update(TrackerUpdateAction.composite(
+        TrackerUpdateAction.glow(true),
+        TrackerUpdateAction.glowColor(color)
+    ));
+}
+
+public void removeGlowingOutline(Tracker tracker) {
+    tracker.update(TrackerUpdateAction.glow(false));
+}
+
+// Usage
+addGlowingOutline(tracker, 0x00FF00); // Green outline
+```
+
+### Equipment Display
+
+```java
+public void updateEquipment(Tracker tracker, ItemStack helmet, ItemStack chestplate) {
+    // Update helmet
+    if (helmet != null) {
+        tracker.update(
+            TrackerUpdateAction.itemStack(TransformedItemStack.of(helmet)),
+            BonePredicate.name("helmet_bone")
+        );
+        tracker.update(TrackerUpdateAction.togglePart(true), BonePredicate.name("helmet_bone"));
+    } else {
+        tracker.update(TrackerUpdateAction.togglePart(false), BonePredicate.name("helmet_bone"));
+    }
+    
+    // Update chestplate
+    if (chestplate != null) {
+        tracker.update(
+            TrackerUpdateAction.itemStack(TransformedItemStack.of(chestplate)),
+            BonePredicate.name("chestplate_bone")
+        );
+        tracker.update(TrackerUpdateAction.togglePart(true), BonePredicate.name("chestplate_bone"));
+    } else {
+        tracker.update(TrackerUpdateAction.togglePart(false), BonePredicate.name("chestplate_bone"));
+    }
+}
+```
+
+### Night Vision Effect
+
+```java
+public void applyNightVision(Tracker tracker, boolean enable) {
+    if (enable) {
+        // Make model fully bright in darkness
+        tracker.update(TrackerUpdateAction.brightness(15, 15));
+    } else {
+        // Use ambient lighting
+        tracker.update(TrackerUpdateAction.brightness(0, 0));
+    }
+}
+```
+
+## Best Practices
+
+1. **Combine Actions**: Use `composite()` or `then()` to apply multiple changes atomically
+2. **Use Predicates**: Filter bones efficiently with `BonePredicate` instead of updating all bones
+3. **Revert Changes**: Store previous states when making temporary changes
+4. **Performance**: Batch updates together rather than calling `update()` multiple times
+5. **None Action**: Use `none()` for conditional logic instead of null checks
+
+## See Also
+
+- [Tracker](tracker) - Base tracker class that uses update actions
+- [EntityTracker](entity-tracker) - Entity tracker implementation
+- [DummyTracker](dummy-tracker) - Dummy tracker implementation

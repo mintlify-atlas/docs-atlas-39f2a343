@@ -1,0 +1,123 @@
+---
+title: "Introduction"
+description: "Modern Bedrock model engine for Minecraft Java Edition with runtime BlockBench model rendering and animation"
+---
+
+<div className="py-12">
+  <div className="text-center mb-8">
+    <h1 className="text-5xl font-bold mb-4" style={{color: '#04ac5c'}}>BetterModel</h1>
+    <p className="text-xl text-slate-400 max-w-3xl mx-auto">
+      Server-side 3D model rendering and animation engine for Minecraft Java Edition. 
+      Import BlockBench models, play animations, and create custom entities with zero client-side mods.
+    </p>
+  </div>
+</div>
+
+## What is BetterModel?
+
+BetterModel is a powerful server-side engine that brings fully animated 3D models to Minecraft Java Edition without requiring any client-side modifications. Using item display entities and packet manipulation, it enables you to create custom NPCs, bosses, cosmetics, and interactive entities with BlockBench models.
+
+<CardGroup cols={2}>
+  <Card title="Server-Side Rendering" icon="server">
+    No client mods required. All rendering happens server-side using item display entities and packets.
+  </Card>
+  <Card title="BlockBench Integration" icon="cube">
+    Import .bbmodel files directly. Auto-generates resource packs for seamless integration.
+  </Card>
+  <Card title="Advanced Animations" icon="film">
+    Play complex animations with per-player support, including 12-limb player model animations.
+  </Card>
+  <Card title="Performance First" icon="gauge-high">
+    Optimized for high-traffic servers with asynchronous design and efficient packet handling.
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion title="Server-Side 3D Models" icon="cube-transparent">
+    Render fully 3D BlockBench models using item display entity packets. No resource pack downloads or client-side mods required for core functionality.
+  </Accordion>
+  
+  <Accordion title="Runtime Animation System" icon="play">
+    Play complex animations at runtime with support for looping, speed control, and per-player animations. Each player can see different animations simultaneously.
+  </Accordion>
+  
+  <Accordion title="Custom Hit Detection" icon="bullseye">
+    Create custom hitboxes for bones with interaction callbacks. Perfect for boss mechanics, interactive NPCs, and multi-part entities.
+  </Accordion>
+  
+  <Accordion title="Player Model Support" icon="user">
+    Animate player models with full 12-limb support, including individual finger control and advanced body movements.
+  </Accordion>
+  
+  <Accordion title="Auto Resource Pack Generation" icon="file-zipper">
+    Automatically generates optimized resource packs from your .bbmodel files, handling all texture and model data transformations.
+  </Accordion>
+  
+  <Accordion title="Multi-Platform Support" icon="layer-group">
+    Works across Bukkit, Spigot, Paper, Purpur, Folia, and Fabric. Single API for all platforms.
+  </Accordion>
+</AccordionGroup>
+
+## Quick Example
+
+Here's how easy it is to spawn an animated model:
+
+```java Basic Entity Model
+// Get the model renderer
+EntityTracker tracker = BetterModel.model("demon_knight")
+    .map(renderer -> renderer.getOrCreate(BukkitAdapter.adapt(entity)))
+    .orElse(null);
+
+// Play an animation
+if (tracker != null) {
+    tracker.animate("attack", AnimationModifier.DEFAULT);
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/quickstart">
+    Follow our quickstart guide to create your first animated model
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/bettermodel">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Examples" icon="book-open" href="/examples/basic-entity-model">
+    See real-world examples and use cases
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/toxicity188/BetterModel">
+    View the source code and contribute
+  </Card>
+</CardGroup>
+
+## Why Choose BetterModel?
+
+<Steps>
+  <Step title="Stability First">
+    Conservative approach to feature expansion ensures a stable API and operational safety for production servers.
+  </Step>
+  
+  <Step title="Performance Optimized">
+    Minimized runtime computation, memory footprint, and network overhead through asynchronous design.
+  </Step>
+  
+  <Step title="Built for Scale">
+    Essential features designed specifically for high-population servers and MMORPG content creation.
+  </Step>
+</Steps>
+
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://discord.com/invite/rePyFESDbk">
+    Join our Discord server for support, discussions, and community showcase
+  </Card>
+  <Card title="Report Issues" icon="bug" href="https://github.com/toxicity188/BetterModel/issues">
+    Found a bug? Report it on GitHub Issues
+  </Card>
+</CardGroup>
+
+<Note>
+  BetterModel is optimized for Minecraft 1.21+. Check the [Installation](/installation) guide for supported versions and platforms.
+</Note>

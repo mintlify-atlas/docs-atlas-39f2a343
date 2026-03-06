@@ -1,0 +1,365 @@
+---
+title: HitBox
+description: Interactive collision detection for model bones using invisible entities
+---
+
+The `HitBox` interface represents an interactive collision box attached to a bone. Hitboxes enable player interaction, damage detection, and entity mounting for models.
+
+## Class Information
+
+**Package:** `kr.toxicity.model.api.nms`  
+**Type:** Interface  
+**Extends:** `Identifiable`  
+**Since:** 1.15.2
+
+## Overview
+
+Hitboxes are typically implemented using invisible entities (like Slimes or Interaction entities) that follow bone positions. They enable:
+
+- Click/interact detection
+- Damage/attack detection  
+- Entity mounting and riding
+- Custom collision shapes per bone
+
+## Creation
+
+Hitboxes are created through `RenderedBone`:
+
+```java
+boolean createHitBox(
+    BaseEntity entity,
+    Predicate<RenderedBone> predicate,
+    HitBoxListener listener
+)
+```
+
+**Example:**
+```java
+// Create hitbox with listener
+HitBoxListener listener = HitBoxListener.builder()
+    .interact(event -> {
+        PlatformPlayer player = event.player();
+        player.sendMessage("You clicked: " + event.getHitBox().groupName());
+    })
+    .damage(event -> {
+        player.sendMessage("Hit for " + event.damage() + " damage!");
+        event.setCancelled(false); // Allow damage
+    })
+    .build();
+
+// Apply to bones with hitbox tag
+renderedBone.createHitBox(
+    entity,
+    BonePredicate.tag(BoneTag.of("hitbox")),
+    listener
+);
+```
+
+## Identification
+
+```java
+BoneName groupName()
+RenderedBone positionSource()
+PlatformEntity source()
+```
+
+Get information about the hitbox's associated bone and entity.
+
+**Example:**
+```java
+HitBox hitBox = bone.getHitBox();
+if (hitBox != null) {
+    System.out.println("Hitbox for: " + hitBox.groupName());
+    System.out.println("Attached to: " + hitBox.source().name());
+    System.out.println("Position bone: " + hitBox.positionSource().name());
+}
+```
+
+## Interaction Events
+
+### Internal Trigger Methods
+
+These methods are called internally by the NMS implementation:
+
+```java
+@ApiStatus.Internal
+void triggerInteract(PlatformPlayer player, ModelInteractionHand hand)
+
+@ApiStatus.Internal  
+void triggerInteractAt(PlatformPlayer player, ModelInteractionHand hand, Vector3f position)
+```
+
+**Note:** These are invoked automatically when players interact with the hitbox entity. Use `HitBoxListener` to handle these events.
+
+## Visibility Control
+
+```java
+@ApiStatus.Internal
+void hide(PlatformPlayer player)
+
+@ApiStatus.Internal
+void show(PlatformPlayer player)
+```
+
+Control hitbox visibility per player. These methods manage packet sending for the underlying entity.
+
+## Position and Transform
+
+```java
+Vector3f relativePosition()
+```
+
+Returns the hitbox position relative to its source entity.
+
+**Example:**
+```java
+Vector3f relPos = hitBox.relativePosition();
+System.out.println("Hitbox offset: " + relPos);
+
+// Get world position from bone
+Vector3f worldPos = hitBox.positionSource().worldPosition();
+```
+
+## Mounting System
+
+### Mount Controller
+
+```java
+MountController mountController()
+void mountController(MountController controller)
+```
+
+Get or set the mount controller that defines mounting behavior.
+
+**Example:**
+```java
+// Create custom mount controller
+MountController controller = MountController.builder()
+    .canControl(true)
+    .speed(0.2f)
+    .jumpStrength(0.5f)
+    .build();
+
+hitBox.mountController(controller);
+```
+
+### Mounting Entities
+
+```java
+void mount(PlatformEntity entity)
+void dismount(PlatformEntity entity)  
+void dismountAll()
+boolean hasMountDriver()
+boolean hasBeenControlled()
+boolean forceDismount()
+boolean onWalk()
+```
+
+Manage entities mounted on this hitbox.
+
+**Example:**
+```java
+// Mount player on hitbox
+HitBoxListener listener = HitBoxListener.builder()
+    .interact(event -> {
+        PlatformPlayer player = event.player();
+        HitBox hitBox = event.getHitBox();
+        
+        if (!hitBox.hasMountDriver()) {
+            hitBox.mount(player.entity());
+            player.sendMessage("You are now riding!");
+        } else {
+            hitBox.dismount(player.entity());
+            player.sendMessage("You dismounted.");
+        }
+    })
+    .mount((hitBox, entity) -> {
+        entity.sendMessage("Mounted successfully!");
+    })
+    .dismount((hitBox, entity) -> {
+        entity.sendMessage("Dismounted!");
+    })
+    .build();
+
+// Check mount status
+if (hitBox.hasBeenControlled()) {
+    System.out.println("Hitbox is being controlled");
+}
+
+if (hitBox.onWalk()) {
+    System.out.println("Rider is walking");
+}
+```
+
+## Event Handling
+
+```java
+HitBoxListener listener()
+```
+
+Returns the listener attached to this hitbox.
+
+**Example:**
+```java
+HitBoxListener currentListener = hitBox.listener();
+
+// Extend existing listener
+HitBoxListener newListener = currentListener.toBuilder()
+    .damage(event -> {
+        System.out.println("Additional damage handler");
+    })
+    .build();
+```
+
+## Registry Access
+
+```java
+Optional<EntityTrackerRegistry> registry()
+```
+
+Returns the entity tracker registry for the source entity, if available.
+
+**Example:**
+```java
+hitBox.registry().ifPresent(registry -> {
+    System.out.println("Tracker: " + registry.tracker());
+    System.out.println("Entity: " + registry.entity());
+});
+```
+
+## Lifecycle
+
+```java
+void removeHitBox()
+```
+
+Safely removes the hitbox and cleans up associated resources.
+
+**Example:**
+```java
+HitBoxListener listener = HitBoxListener.builder()
+    .remove(hitBox -> {
+        System.out.println("Hitbox removed: " + hitBox.groupName());
+        // Cleanup custom data
+    })
+    .build();
+
+bone.createHitBox(entity, predicate, listener);
+
+// Later...
+if (bone.getHitBox() != null) {
+    bone.getHitBox().removeHitBox();
+}
+```
+
+## Complete Example: Interactive Door
+
+```java
+public void createInteractiveDoor(RenderedBone doorBone, BaseEntity entity) {
+    // Track door state
+    AtomicBoolean isOpen = new AtomicBoolean(false);
+    
+    HitBoxListener doorListener = HitBoxListener.builder()
+        .interact(event -> {
+            HitBox hitBox = event.getHitBox();
+            PlatformPlayer player = event.player();
+            
+            // Toggle door state
+            boolean open = isOpen.getAndSet(!isOpen.get());
+            
+            if (open) {
+                player.sendMessage("Door closed");
+                // Play close animation
+                hitBox.positionSource().stopAnimation(
+                    BonePredicate.TRUE,
+                    "door_open",
+                    null
+                );
+            } else {
+                player.sendMessage("Door opened");
+                // Play open animation
+                // hitBox.positionSource().addAnimation(...)
+            }
+        })
+        .create(hitBox -> {
+            System.out.println("Door hitbox created: " + hitBox.groupName());
+        })
+        .remove(hitBox -> {
+            System.out.println("Door hitbox removed");
+        })
+        .build();
+    
+    // Create hitbox for door bones
+    doorBone.createHitBox(
+        entity,
+        BonePredicate.name("door").withChildren(),
+        doorListener
+    );
+}
+```
+
+## Complete Example: Rideable Mount
+
+```java
+public void createRideableMount(RenderedBone seatBone, BaseEntity entity) {
+    // Configure mount controller
+    MountController mountController = MountController.builder()
+        .canControl(true)
+        .speed(0.25f)
+        .jumpStrength(0.6f)
+        .build();
+    
+    HitBoxListener mountListener = HitBoxListener.builder()
+        .interact(event -> {
+            PlatformPlayer player = event.player();
+            HitBox hitBox = event.getHitBox();
+            
+            if (player.isSneaking()) {
+                // Dismount
+                if (hitBox.hasMountDriver()) {
+                    hitBox.dismount(player.entity());
+                }
+            } else {
+                // Mount
+                if (!hitBox.hasMountDriver()) {
+                    hitBox.mount(player.entity());
+                }
+            }
+        })
+        .mount((hitBox, rider) -> {
+            if (rider instanceof PlatformPlayer player) {
+                player.sendMessage("Press SHIFT to dismount");
+            }
+        })
+        .dismount((hitBox, rider) -> {
+            if (rider instanceof PlatformPlayer player) {
+                player.sendMessage("You dismounted");
+            }
+        })
+        .sync(hitBox -> {
+            // Update every tick while mounted
+            if (hitBox.onWalk()) {
+                // Trigger walk animation
+            }
+        })
+        .build();
+    
+    seatBone.createHitBox(
+        entity,
+        BonePredicate.name("seat"),
+        mountListener
+    );
+    
+    // Set controller after creation
+    HitBox hitBox = seatBone.getHitBox();
+    if (hitBox != null) {
+        hitBox.mountController(mountController);
+    }
+}
+```
+
+## See Also
+
+- [HitBoxListener](/api/hitbox-listener) - Event handling for hitboxes
+- [RenderedBone](/api/rendered-bone) - Creating and managing hitboxes
+- [MountController](/api/mount-controller) - Configuring mount behavior

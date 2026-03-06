@@ -1,0 +1,438 @@
+---
+title: "BetterModelConfig"
+description: "Configuration interface for BetterModel"
+---
+
+## Overview
+
+The `BetterModelConfig` interface provides access to various configuration settings for BetterModel, including debug options, pack generation settings, module toggles, and runtime behaviors.
+
+You can access the configuration through `BetterModel.config()`.
+
+## Package
+
+```java
+kr.toxicity.model.api.BetterModelConfig
+```
+
+## Methods
+
+### Sub-Configuration Access
+
+#### debug()
+
+Returns the debug configuration settings.
+
+```java
+@NotNull DebugConfig debug()
+```
+
+**Returns:** `DebugConfig` - The debug configuration
+
+**Since:** 1.15.2
+
+#### indicator()
+
+Returns the indicator configuration settings.
+
+```java
+@NotNull IndicatorConfig indicator()
+```
+
+**Returns:** `IndicatorConfig` - The indicator configuration
+
+**Since:** 1.15.2
+
+#### module()
+
+Returns the module configuration for enabling/disabling features.
+
+```java
+@NotNull ModuleConfig module()
+```
+
+**Returns:** `ModuleConfig` - The module configuration
+
+**Since:** 1.15.2
+
+#### pack()
+
+Returns the resource pack configuration.
+
+```java
+@NotNull PackConfig pack()
+```
+
+**Returns:** `PackConfig` - The pack configuration
+
+**Since:** 1.15.2
+
+---
+
+### Feature Toggles
+
+#### metrics()
+
+Checks if metrics collection (e.g., bStats) is enabled.
+
+```java
+boolean metrics()
+```
+
+**Returns:** `boolean` - True if enabled, false otherwise
+
+**Since:** 1.15.2
+
+#### sightTrace()
+
+Checks if sight tracing (visibility checking) is enabled for entity rendering optimization.
+
+```java
+boolean sightTrace()
+```
+
+**Returns:** `boolean` - True if enabled, false otherwise
+
+**Since:** 1.15.2
+
+#### mergeWithExternalResources()
+
+Checks if BetterModel should attempt to merge its resource pack with external plugins/mods.
+
+```java
+boolean mergeWithExternalResources()
+```
+
+**Returns:** `boolean` - True to merge, false otherwise
+
+**Since:** 1.15.2
+
+#### followMobInvisibility()
+
+Checks if model trackers should follow the source entity's invisibility status.
+
+```java
+boolean followMobInvisibility()
+```
+
+**Returns:** `boolean` - True to follow invisibility, false otherwise
+
+**Since:** 1.15.2
+
+#### usePurpurAfk()
+
+Checks if Purpur's AFK API should be used for AFK detection.
+
+```java
+boolean usePurpurAfk()
+```
+
+**Returns:** `boolean` - True to use Purpur AFK, false otherwise
+
+**Since:** 1.15.2
+
+#### versionCheck()
+
+Checks if version update notifications should be sent to OPs on join.
+
+```java
+boolean versionCheck()
+```
+
+**Returns:** `boolean` - True to send notifications, false otherwise
+
+**Since:** 1.15.2
+
+#### cancelPlayerModelInventory()
+
+Checks if inventory swap packets should be cancelled for players with active models.
+
+```java
+boolean cancelPlayerModelInventory()
+```
+
+**Returns:** `boolean` - True to cancel, false otherwise
+
+**Since:** 1.15.2
+
+#### enableStrictLoading()
+
+Checks if strict loading mode is enabled. Strict loading causes the platform to fail fast on model loading errors.
+
+```java
+boolean enableStrictLoading()
+```
+
+**Returns:** `boolean` - True if strict loading is enabled, false otherwise
+
+**Since:** 1.15.2
+
+---
+
+### Item & Model Settings
+
+#### item()
+
+Returns a supplier for the platform item stack used as the base for model items.
+
+```java
+@NotNull Supplier<PlatformItemStack> item()
+```
+
+**Returns:** `Supplier<PlatformItemStack>` - A supplier providing the target item stack
+
+**Since:** 2.0.0
+
+#### itemModel()
+
+Returns the item model string identifier used for the resource pack target item.
+
+```java
+@NotNull String itemModel()
+```
+
+**Returns:** `String` - The item model string
+
+**Since:** 2.0.0
+
+#### itemNamespace()
+
+Returns the namespace used for the target item.
+
+```java
+@NotNull String itemNamespace()
+```
+
+**Returns:** `String` - The item namespace
+
+**Since:** 1.15.2
+
+#### namespace()
+
+Returns the namespace used for the generated resource pack.
+
+```java
+@NotNull String namespace()
+```
+
+**Returns:** `String` - The namespace
+
+**Since:** 1.15.2
+
+---
+
+### Sight & Rendering Settings
+
+#### maxSight()
+
+Returns the maximum range for sight tracing in blocks.
+
+```java
+double maxSight()
+```
+
+**Returns:** `double` - The max range
+
+**Since:** 1.15.2
+
+#### minSight()
+
+Returns the minimum range for sight tracing in blocks.
+
+```java
+double minSight()
+```
+
+**Returns:** `double` - The min range
+
+**Since:** 1.15.2
+
+---
+
+### Pack Generation Settings
+
+#### packType()
+
+Returns the type of resource pack generation (Folder, Zip, or None).
+
+```java
+@NotNull PackType packType()
+```
+
+**Returns:** `PackType` - The pack type
+
+**Since:** 1.15.2
+
+**Example:**
+```java
+BetterModelConfig config = BetterModel.config();
+PackType type = config.packType();
+switch (type) {
+    case FOLDER -> System.out.println("Pack generated as folder");
+    case ZIP -> System.out.println("Pack generated as ZIP");
+    case NONE -> System.out.println("Pack generation disabled");
+}
+```
+
+#### buildFolderLocation()
+
+Returns the location of the build folder for resource packs.
+
+```java
+@NotNull String buildFolderLocation()
+```
+
+**Returns:** `String` - The build folder path
+
+**Since:** 1.15.2
+
+---
+
+### Mount & Entity Settings
+
+#### defaultMountController()
+
+Returns the default mount controller used for entities.
+
+```java
+@NotNull MountController defaultMountController()
+```
+
+**Returns:** `MountController` - The default mount controller
+
+**Since:** 1.15.2
+
+**See Also:** `kr.toxicity.model.api.mount.MountControllers`
+
+---
+
+### Performance & Timing Settings
+
+#### lerpFrameTime()
+
+Returns the interpolation frame time (lerp) in milliseconds for smooth animations.
+
+```java
+int lerpFrameTime()
+```
+
+**Returns:** `int` - The lerp frame time
+
+**Since:** 1.15.2
+
+#### playerHideDelay()
+
+Returns the delay in ticks before hiding a player's model after they become invisible.
+
+```java
+long playerHideDelay()
+```
+
+**Returns:** `long` - The hide delay
+
+**Since:** 1.15.2
+
+#### packetBundlingSize()
+
+Returns the threshold size for packet bundling to optimize network performance.
+
+```java
+int packetBundlingSize()
+```
+
+**Returns:** `int` - The packet bundling size
+
+**Since:** 1.15.2
+
+---
+
+## Nested Types
+
+### PackType
+
+Enumerates the types of resource pack generation.
+
+```java
+enum PackType {
+    FOLDER,
+    ZIP,
+    NONE
+}
+```
+
+**Values:**
+
+<ParamField path="FOLDER" type="enum">
+  Generate the resource pack as a folder structure
+</ParamField>
+
+<ParamField path="ZIP" type="enum">
+  Generate the resource pack as a ZIP archive
+</ParamField>
+
+<ParamField path="NONE" type="enum">
+  Do not generate a resource pack
+</ParamField>
+
+**Since:** 1.15.2
+
+---
+
+## Complete Example
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.BetterModelConfig;
+import kr.toxicity.model.api.config.DebugConfig;
+
+public class ConfigExample {
+    
+    public void printConfiguration() {
+        BetterModelConfig config = BetterModel.config();
+        
+        // Feature toggles
+        System.out.println("Metrics: " + config.metrics());
+        System.out.println("Sight Trace: " + config.sightTrace());
+        System.out.println("Version Check: " + config.versionCheck());
+        
+        // Pack settings
+        System.out.println("Pack Type: " + config.packType());
+        System.out.println("Build Folder: " + config.buildFolderLocation());
+        System.out.println("Namespace: " + config.namespace());
+        
+        // Performance settings
+        System.out.println("Lerp Frame Time: " + config.lerpFrameTime() + "ms");
+        System.out.println("Packet Bundling Size: " + config.packetBundlingSize());
+        
+        // Sight settings
+        System.out.println("Max Sight: " + config.maxSight());
+        System.out.println("Min Sight: " + config.minSight());
+    }
+    
+    public void checkDebugMode() {
+        BetterModelConfig config = BetterModel.config();
+        DebugConfig debug = config.debug();
+        
+        // Access debug configuration
+        // (methods depend on DebugConfig implementation)
+    }
+    
+    public void optimizeForPerformance() {
+        BetterModelConfig config = BetterModel.config();
+        
+        if (config.sightTrace()) {
+            double maxSight = config.maxSight();
+            System.out.println("Sight tracing enabled with max range: " + maxSight);
+            // Implement sight-based optimizations
+        }
+        
+        int bundleSize = config.packetBundlingSize();
+        System.out.println("Using packet bundling with size: " + bundleSize);
+    }
+}
+```
+
+## See Also
+
+- [BetterModel](/api/bettermodel) - Main API entry point
+- [BetterModelPlatform](/api/bettermodel-platform) - Platform interface

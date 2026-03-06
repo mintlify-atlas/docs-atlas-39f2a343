@@ -1,0 +1,500 @@
+---
+title: "Folia"
+description: "Folia-specific considerations and regionized multithreading support"
+---
+
+## Overview
+
+Folia is Paper's experimental multi-threaded server implementation that splits the world into independent regions, each running on separate threads. BetterModel fully supports Folia with region-aware scheduling and thread-safe operations.
+
+<Warning>
+  Folia is **experimental** and still in active development. While BetterModel is tested on Folia, expect potential issues as Folia evolves.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Region-Based Threading" icon="layer-group">
+    Each region runs on its own thread with independent tick loop
+  </Card>
+  <Card title="Automatic Scheduling" icon="clock">
+    BetterModel automatically uses region-aware schedulers
+  </Card>
+  <Card title="Thread-Safe Operations" icon="shield-check">
+    All model operations are safe across region boundaries
+  </Card>
+  <Card title="Zero Configuration" icon="check">
+    Works out-of-the-box with the Paper JAR
+  </Card>
+</CardGroup>
+
+## What is Folia?
+
+Folia fundamentally changes how Minecraft servers handle concurrency:
+
+<Steps>
+  <Step title="World Splitting">
+    The world is divided into independent regions (typically chunks or chunk groups).
+  </Step>
+  
+  <Step title="Parallel Execution">
+    Each region runs on a separate thread, allowing true parallel processing.
+  </Step>
+  
+  <Step title="Region Isolation">
+    Entities in different regions cannot directly interact without thread synchronization.
+  </Step>
+  
+  <Step title="Scheduler Changes">
+    Traditional Bukkit scheduler is replaced with region and async schedulers.
+  </Step>
+</Steps>
+
+<Info>
+  Folia is designed for high-player-count servers where regions can be processed independently. It's not always faster than Paper for small servers.
+</Info>
+
+## Detection and Installation
+
+BetterModel automatically detects Folia at runtime:
+
+```java Folia Detection
+public interface BetterModelBukkit extends BetterModelPlatform {
+    // Folia detected by RegionizedServer class
+    boolean IS_FOLIA = classExists(
+        "io.papermc.paper.threadedregions.RegionizedServer"
+    );
+}
+```
+
+### Installation Steps
+
+<Steps>
+  <Step title="Install Folia">
+    Download Folia from [PaperMC](https://papermc.io/downloads/folia):
+    ```bash
+    wget https://api.papermc.io/v2/projects/folia/versions/1.21.11/builds/.../downloads/folia-1.21.11-....jar
+    ```
+  </Step>
+  
+  <Step title="Use Paper JAR">
+    Install BetterModel using the **Paper** JAR:
+    ```
+    bettermodel-paper-2.2.0.jar
+    ```
+    
+    <Info>
+      Folia is detected as a Paper fork, so always use the Paper version of BetterModel.
+    </Info>
+  </Step>
+  
+  <Step title="Verify detection">
+    Check the console on startup:
+    ```
+    [BetterModel] Plugin is loaded. (XXX ms)
+    [BetterModel] Platform: Folia
+    ```
+  </Step>
+</Steps>
+
+## Region-Aware Scheduling
+
+The key difference with Folia is the scheduler. BetterModel automatically uses Folia's region scheduler when detected:
+
+```kotlin Paper Scheduler (Folia-Compatible)
+class PaperScheduler : BukkitModelScheduler {
+    
+    // Region-specific tasks
+    override fun task(location: Location, runnable: Runnable): ModelTask? {
+        return Bukkit.getRegionScheduler().run(PLUGIN, location) {
+            runnable.run()
+        }.wrap()
+    }
+    
+    override fun taskLater(
+        location: Location, 
+        delay: Long, 
+        runnable: Runnable
+    ): ModelTask? {
+        return Bukkit.getRegionScheduler().runDelayed(
+            PLUGIN, location, {
+                runnable.run()
+            }, delay
+        ).wrap()
+    }
+    
+    // Async tasks (thread-pool based)
+    override fun asyncTask(runnable: Runnable) {
+        return Bukkit.getAsyncScheduler().runNow(PLUGIN) {
+            runnable.run()
+        }.wrap()
+    }
+}
+```
+
+### Region vs Global Schedulers
+
+<AccordionGroup>
+  <Accordion title="Region Scheduler" icon="layer-group">
+    Used for tasks that must run in a specific region (entity operations):
+    
+    ```java Region-Specific Task
+    BetterModelBukkit platform = BetterModelBukkit.platform();
+    
+    // Schedule task in entity's region
+    platform.scheduler().task(entity.getLocation(), () -> {
+        // This runs in the region containing the entity
+        // Safe to modify entity, spawn displays, etc.
+    });
+    ```
+    
+    <Note>
+      Location-based tasks automatically execute in the correct region thread.
+    </Note>
+  </Accordion>
+  
+  <Accordion title="Async Scheduler" icon="clock">
+    Used for tasks that don't touch world state:
+    
+    ```java Async Task
+    platform.scheduler().asyncTask(() -> {
+        // This runs in async thread pool
+        // Cannot modify world/entities directly
+        // Use for I/O, calculations, etc.
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Global Region Scheduler" icon="globe">
+    Folia also has a global region scheduler for tasks that span regions:
+    
+    ```java Global Task
+    Bukkit.getGlobalRegionScheduler().run(plugin, (task) -> {
+        // Runs once across all regions
+    });
+    ```
+    
+    BetterModel uses this internally for plugin-wide operations.
+  </Accordion>
+</AccordionGroup>
+
+## Thread Safety Considerations
+
+### Safe Operations
+
+BetterModel's API is thread-safe across regions:
+
+```java Thread-Safe API Usage
+// Safe: Getting model renderers (immutable)
+ModelRenderer renderer = BetterModel.model("demon_knight").orElse(null);
+
+// Safe: Creating trackers (internally synchronized)
+EntityTracker tracker = renderer.create(BukkitAdapter.adapt(entity));
+
+// Safe: Animating (synchronized per tracker)
+tracker.animate("attack", AnimationModifier.DEFAULT);
+
+// Safe: Updating display properties
+tracker.update(TrackerUpdateAction.tint(0xFF0000));
+```
+
+### Region Ownership
+
+Each entity "belongs" to a specific region:
+
+```java Region Ownership
+public void modifyModel(Entity entity) {
+    // WRONG: May be called from different region thread
+    EntityTracker tracker = getTracker(entity);
+    tracker.animate("attack");  // Not safe!
+    
+    // CORRECT: Schedule in entity's region
+    BetterModelBukkit.platform().scheduler().task(
+        entity.getLocation(),
+        () -> {
+            EntityTracker tracker = getTracker(entity);
+            tracker.animate("attack");  // Safe!
+        }
+    );
+}
+```
+
+<Warning>
+  **Critical Rule**: Always schedule entity operations in the entity's region using `scheduler().task(location, runnable)`.
+</Warning>
+
+## Plugin Configuration
+
+The `paper-plugin.yml` explicitly declares Folia support:
+
+```yaml paper-plugin.yml
+name: BetterModel
+main: kr.toxicity.model.paper.BetterModelPaper
+loader: kr.toxicity.model.paper.BetterModelLoader
+folia-supported: true  # Declares Folia compatibility
+apiVersion: '1.20'
+```
+
+<Info>
+  The `folia-supported: true` flag tells Folia that BetterModel is tested and compatible with regionized threading.
+</Info>
+
+## Performance Implications
+
+### Benefits on Folia
+
+<CardGroup cols={2}>
+  <Card title="Parallel Processing" icon="gauge-high">
+    Models in different regions update simultaneously on separate threads
+  </Card>
+  <Card title="No Main Thread Blocking" icon="check">
+    Display entity updates don't bottleneck on single thread
+  </Card>
+  <Card title="Region Isolation" icon="shield">
+    Performance issues in one region don't affect others
+  </Card>
+  <Card title="Async Operations" icon="rotate">
+    Resource pack generation and I/O operations remain async
+  </Card>
+</CardGroup>
+
+### Potential Overhead
+
+<Warning>
+  Folia adds overhead for:
+  - Cross-region entity tracking
+  - Scheduler coordination
+  - Thread synchronization
+  
+  For small servers (< 50 players), Paper may perform better than Folia.
+</Warning>
+
+## Common Patterns
+
+### Spawning Models
+
+```java Folia-Safe Model Spawning
+public class ModelSpawner {
+    private final BetterModelBukkit platform = BetterModelBukkit.platform();
+    
+    public void spawnModel(Location location, String modelId) {
+        // Schedule in target region
+        platform.scheduler().task(location, () -> {
+            // Spawn entity
+            Entity entity = location.getWorld().spawnEntity(
+                location, 
+                EntityType.ZOMBIE
+            );
+            
+            // Attach model (safe - same region)
+            BetterModel.model(modelId)
+                .map(r -> r.create(BukkitAdapter.adapt(entity)))
+                .ifPresent(tracker -> {
+                    tracker.animate("spawn", AnimationModifier.DEFAULT);
+                });
+        });
+    }
+}
+```
+
+### Updating Models
+
+```java Cross-Region Updates
+public class ModelUpdater {
+    public void updateAllModels(Collection<Entity> entities) {
+        // Group entities by region
+        Map<Location, List<Entity>> byRegion = entities.stream()
+            .collect(Collectors.groupingBy(Entity::getLocation));
+        
+        // Schedule update in each region
+        byRegion.forEach((location, regionEntities) -> {
+            platform.scheduler().task(location, () -> {
+                regionEntities.forEach(entity -> {
+                    getTracker(entity).animate("update");
+                });
+            });
+        });
+    }
+}
+```
+
+### Async Pre-processing
+
+```java Async + Region Pattern
+public void loadAndApplyModel(Entity entity, String modelId) {
+    // Heavy computation async
+    platform.scheduler().asyncTask(() -> {
+        ModelData data = computeModelData(modelId);
+        
+        // Apply in entity's region
+        platform.scheduler().task(entity.getLocation(), () -> {
+            applyModelData(entity, data);
+        });
+    });
+}
+```
+
+## Debugging Folia Issues
+
+### Thread Assertions
+
+Folia will throw exceptions if you violate thread rules:
+
+```
+IllegalStateException: Cannot modify entity from incorrect thread
+    at org.bukkit.craftbukkit.entity.CraftEntity.setLocation
+```
+
+**Solution**: Wrap the operation in `scheduler().task(location, runnable)`.
+
+### Checking Current Thread
+
+```java Debug Thread Context
+public void debugThread() {
+    Thread thread = Thread.currentThread();
+    logger.info("Thread: " + thread.getName());
+    
+    // Folia region threads are named like "RegionScheduler - x"
+    if (thread.getName().startsWith("RegionScheduler")) {
+        logger.info("Running in region thread");
+    }
+}
+```
+
+### Monitoring Regions
+
+Check Folia's region status with:
+```
+/folia regions
+/folia tps
+```
+
+## Limitations
+
+<AccordionGroup>
+  <Accordion title="No Global Entity Iteration" icon="ban">
+    You cannot safely iterate all entities across regions:
+    
+    ```java
+    // UNSAFE on Folia
+    for (Entity entity : world.getEntities()) {
+        // May be in different region thread!
+    }
+    ```
+    
+    Instead, track entities in your own region-aware data structures.
+  </Accordion>
+  
+  <Accordion title="Event Handler Limitations" icon="exclamation">
+    Event handlers run in the region where the event occurred:
+    
+    ```java
+    @EventHandler
+    public void onDamage(EntityDamageEvent event) {
+        // This runs in the entity's region
+        Entity entity = event.getEntity();
+        // Safe to modify entity directly here
+    }
+    ```
+    
+    But you can't safely access entities in other regions from the event.
+  </Accordion>
+  
+  <Accordion title="Plugin Messaging" icon="message">
+    Plugin channels work differently on Folia. BetterModel handles this internally, but be aware if you're implementing custom cross-region communication.
+  </Accordion>
+</AccordionGroup>
+
+## MythicMobs Integration
+
+BetterModel's MythicMobs integration is Folia-aware:
+
+```kotlin Folia-Safe Mechanics
+AnimationScript.of(BetterModelBukkit.IS_FOLIA) script@ { tracker ->
+    // Automatically uses correct scheduler based on platform
+    if (IS_FOLIA) {
+        // Region-safe execution
+    } else {
+        // Standard sync execution
+    }
+}
+```
+
+Mechanics automatically set their thread safety:
+```kotlin
+abstract class AbstractSkillMechanic : Mechanic {
+    init {
+        isAsyncSafe = !BetterModelBukkit.IS_FOLIA
+    }
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Always schedule region tasks">
+    Never modify entities or world state without scheduling in the correct region:
+    ```java
+    scheduler.task(entity.getLocation(), () -> {
+        // Modifications here
+    });
+    ```
+  </Step>
+  
+  <Step title="Use async for I/O">
+    Keep file operations, network calls, and heavy computations async:
+    ```java
+    scheduler.asyncTask(() -> {
+        // I/O or computation
+    });
+    ```
+  </Step>
+  
+  <Step title="Minimize cross-region dependencies">
+    Design your systems to work within single regions when possible.
+  </Step>
+  
+  <Step title="Test on Folia">
+    If supporting Folia, test your integration on actual Folia servers. Race conditions may only appear under load.
+  </Step>
+</Steps>
+
+## Migration from Paper
+
+<Info>
+  **Good news**: If you're using BetterModel's API correctly, your code should work on Folia without changes!
+</Info>
+
+The scheduler abstraction handles platform differences:
+
+```java Platform-Agnostic Code
+// This works on both Paper and Folia
+BetterModelBukkit platform = BetterModelBukkit.platform();
+
+platform.scheduler().task(location, () -> {
+    // Your code
+});
+
+platform.scheduler().asyncTask(() -> {
+    // Async code
+});
+```
+
+Behind the scenes:
+- **Paper**: Uses `Bukkit.getScheduler()`
+- **Folia**: Uses `Bukkit.getRegionScheduler()` and `Bukkit.getAsyncScheduler()`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Paper Platform" icon="scroll" href="/platforms/bukkit-spigot-paper">
+    Learn about standard Paper/Bukkit implementation
+  </Card>
+  <Card title="Trackers" icon="crosshairs" href="/concepts/trackers">
+    Understand tracker lifecycle and management
+  </Card>
+  <Card title="Performance Optimization" icon="gauge-high" href="/examples/performance-optimization">
+    Optimize BetterModel for high-player-count servers
+  </Card>
+  <Card title="Examples" icon="code" href="/examples/basic-entity-model">
+    See complete API usage examples
+  </Card>
+</CardGroup>

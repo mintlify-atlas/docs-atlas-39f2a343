@@ -1,0 +1,594 @@
+---
+title: Custom Armor Model
+description: Create custom armor models that replace or enhance player armor rendering
+icon: shield
+---
+
+Learn how to create custom armor models that can replace default armor rendering or add cosmetic armor overlays.
+
+## Overview
+
+BetterModel supports player models with custom armor rendering. This allows you to:
+- Replace default armor with custom 3D models
+- Add cosmetic armor layers
+- Create unique armor sets with animations
+- Apply armor models to specific players
+
+## Prerequisites
+
+<Steps>
+  <Step title="Create Player Model">
+    Your BlockBench model must be configured as a player model and placed in `BetterModel/players/` directory.
+  </Step>
+  
+  <Step title="Setup Armor Bones">
+    Name your armor bones according to conventions:
+    - `helmet`, `chestplate`, `leggings`, `boots`
+    - Or use bone tags for more flexibility
+  </Step>
+</Steps>
+
+## Basic Armor Model
+
+### Creating Armor Tracker
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.profile.ModelProfile;
+import kr.toxicity.model.api.tracker.PlayerTracker;
+import org.bukkit.entity.Player;
+
+public class ArmorModelManager {
+    
+    public PlayerTracker applyArmorModel(Player player, String modelName) {
+        return BetterModel.limb(modelName).map(renderer -> {
+            // Create player profile from player
+            ModelProfile profile = ModelProfile.of(player);
+            
+            // Create tracker with player skin
+            PlayerTracker tracker = (PlayerTracker) renderer.create(
+                BaseEntity.of(player),
+                profile,
+                TrackerModifier.DEFAULT
+            );
+            
+            return tracker;
+        }).orElse(null);
+    }
+    
+    public void removeArmorModel(PlayerTracker tracker) {
+        if (tracker != null && !tracker.isClosed()) {
+            tracker.close();
+        }
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.profile.ModelProfile
+import kr.toxicity.model.api.tracker.PlayerTracker
+import org.bukkit.entity.Player
+
+class ArmorModelManager {
+    
+    fun applyArmorModel(player: Player, modelName: String): PlayerTracker? {
+        return BetterModel.limb(modelName).map { renderer ->
+            // Create player profile from player
+            val profile = ModelProfile.of(player)
+            
+            // Create tracker with player skin
+            val tracker = renderer.create(
+                BaseEntity.of(player),
+                profile,
+                TrackerModifier.DEFAULT
+            ) as PlayerTracker
+            
+            tracker
+        }.orElse(null)
+    }
+    
+    fun removeArmorModel(tracker: PlayerTracker?) {
+        tracker?.takeIf { !it.isClosed }?.close()
+    }
+}
+```
+</CodeGroup>
+
+## Dynamic Armor System
+
+### Full Armor Manager
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.profile.ModelProfile;
+import kr.toxicity.model.api.tracker.PlayerTracker;
+import kr.toxicity.model.api.tracker.TrackerUpdateAction;
+import kr.toxicity.model.api.util.function.BonePredicate;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.ItemStack;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class DynamicArmorSystem implements Listener {
+    
+    private final Map<UUID, PlayerTracker> armorTrackers = new ConcurrentHashMap<>();
+    private final String armorModelName = "custom_armor";
+    
+    public void applyArmor(Player player) {
+        // Remove existing tracker if any
+        removeArmor(player);
+        
+        BetterModel.limb(armorModelName).ifPresent(renderer -> {
+            ModelProfile profile = ModelProfile.of(player);
+            
+            PlayerTracker tracker = (PlayerTracker) renderer.getOrCreate(
+                BaseEntity.of(player),
+                profile
+            );
+            
+            armorTrackers.put(player.getUniqueId(), tracker);
+            
+            // Update armor visibility based on equipped items
+            updateArmorVisibility(player, tracker);
+            
+            // Start idle animation
+            tracker.animate("armor_idle");
+        });
+    }
+    
+    public void removeArmor(Player player) {
+        PlayerTracker tracker = armorTrackers.remove(player.getUniqueId());
+        if (tracker != null) {
+            tracker.close();
+        }
+    }
+    
+    public void updateArmorVisibility(Player player, PlayerTracker tracker) {
+        ItemStack helmet = player.getInventory().getHelmet();
+        ItemStack chestplate = player.getInventory().getChestplate();
+        ItemStack leggings = player.getInventory().getLeggings();
+        ItemStack boots = player.getInventory().getBoots();
+        
+        // Show/hide armor pieces based on equipped items
+        tracker.update(
+            TrackerUpdateAction.togglePart(helmet != null && helmet.getType() != Material.AIR),
+            BonePredicate.name("helmet")
+        );
+        
+        tracker.update(
+            TrackerUpdateAction.togglePart(chestplate != null && chestplate.getType() != Material.AIR),
+            BonePredicate.name("chestplate")
+        );
+        
+        tracker.update(
+            TrackerUpdateAction.togglePart(leggings != null && leggings.getType() != Material.AIR),
+            BonePredicate.name("leggings")
+        );
+        
+        tracker.update(
+            TrackerUpdateAction.togglePart(boots != null && boots.getType() != Material.AIR),
+            BonePredicate.name("boots")
+        );
+    }
+    
+    @EventHandler
+    public void onArmorChange(PlayerArmorStandManipulateEvent event) {
+        Player player = event.getPlayer();
+        PlayerTracker tracker = armorTrackers.get(player.getUniqueId());
+        
+        if (tracker != null) {
+            // Update on next tick after inventory updates
+            player.getServer().getScheduler().runTaskLater(
+                player.getServer().getPluginManager().getPlugin("YourPlugin"),
+                () -> updateArmorVisibility(player, tracker),
+                1L
+            );
+        }
+    }
+    
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        removeArmor(event.getPlayer());
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.profile.ModelProfile
+import kr.toxicity.model.api.tracker.PlayerTracker
+import kr.toxicity.model.api.tracker.TrackerUpdateAction
+import kr.toxicity.model.api.util.function.BonePredicate
+import org.bukkit.Material
+import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.plugin.Plugin
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+class DynamicArmorSystem(private val plugin: Plugin) : Listener {
+    
+    private val armorTrackers = ConcurrentHashMap<UUID, PlayerTracker>()
+    private val armorModelName = "custom_armor"
+    
+    fun applyArmor(player: Player) {
+        removeArmor(player)
+        
+        BetterModel.limb(armorModelName).ifPresent { renderer ->
+            val profile = ModelProfile.of(player)
+            
+            val tracker = renderer.getOrCreate(
+                BaseEntity.of(player),
+                profile
+            ) as PlayerTracker
+            
+            armorTrackers[player.uniqueId] = tracker
+            
+            updateArmorVisibility(player, tracker)
+            tracker.animate("armor_idle")
+        }
+    }
+    
+    fun removeArmor(player: Player) {
+        armorTrackers.remove(player.uniqueId)?.close()
+    }
+    
+    fun updateArmorVisibility(player: Player, tracker: PlayerTracker) {
+        val helmet = player.inventory.helmet
+        val chestplate = player.inventory.chestplate
+        val leggings = player.inventory.leggings
+        val boots = player.inventory.boots
+        
+        tracker.update(
+            TrackerUpdateAction.togglePart(helmet != null && helmet.type != Material.AIR),
+            BonePredicate.name("helmet")
+        )
+        
+        tracker.update(
+            TrackerUpdateAction.togglePart(chestplate != null && chestplate.type != Material.AIR),
+            BonePredicate.name("chestplate")
+        )
+        
+        tracker.update(
+            TrackerUpdateAction.togglePart(leggings != null && leggings.type != Material.AIR),
+            BonePredicate.name("leggings")
+        )
+        
+        tracker.update(
+            TrackerUpdateAction.togglePart(boots != null && boots.type != Material.AIR),
+            BonePredicate.name("boots")
+        )
+    }
+    
+    @EventHandler
+    fun onPlayerQuit(event: PlayerQuitEvent) {
+        removeArmor(event.player)
+    }
+}
+```
+</CodeGroup>
+
+## Animated Armor
+
+### Creating Armor with Animations
+
+```java
+public class AnimatedArmorSet {
+    
+    public void applyGlowingArmor(Player player) {
+        BetterModel.limb("glowing_armor").ifPresent(renderer -> {
+            PlayerTracker tracker = (PlayerTracker) renderer.create(
+                BaseEntity.of(player),
+                ModelProfile.of(player)
+            );
+            
+            // Enable glow effect
+            tracker.update(TrackerUpdateAction.composite(
+                TrackerUpdateAction.glow(true),
+                TrackerUpdateAction.glowColor(0x00FFFF)
+            ));
+            
+            // Play pulsing animation
+            tracker.animate("armor_pulse");
+            
+            // Add particle effects every second
+            tracker.tick(20, (t, bundler) -> {
+                Location loc = tracker.location().toBukkit();
+                loc.getWorld().spawnParticle(
+                    Particle.ENCHANTMENT_TABLE,
+                    loc.add(0, 1, 0),
+                    10
+                );
+            });
+        });
+    }
+}
+```
+
+## Armor with Special Effects
+
+### Conditional Armor Effects
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.animation.AnimationModifier;
+import org.bukkit.potion.PotionEffectType;
+
+public class SpecialArmorEffects {
+    
+    public void setupArmorEffects(PlayerTracker tracker, Player player) {
+        // Glow when player has speed effect
+        tracker.perPlayerTick((t, p) -> {
+            if (player.hasPotionEffect(PotionEffectType.SPEED)) {
+                t.update(TrackerUpdateAction.composite(
+                    TrackerUpdateAction.glow(true),
+                    TrackerUpdateAction.glowColor(0xFFFF00)
+                ));
+            } else {
+                t.update(TrackerUpdateAction.glow(false));
+            }
+        });
+        
+        // Play attack animation when player attacks
+        tracker.tick((t, bundler) -> {
+            if (player.getAttackCooldown() == 1.0F) {
+                t.animate("armor_attack", AnimationModifier.builder()
+                    .type(AnimationIterator.Type.PLAY_ONCE)
+                    .speed(2.0F)
+                    .build()
+                );
+            }
+        });
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.animation.AnimationModifier
+import org.bukkit.potion.PotionEffectType
+
+class SpecialArmorEffects {
+    
+    fun setupArmorEffects(tracker: PlayerTracker, player: Player) {
+        // Glow when player has speed effect
+        tracker.perPlayerTick { t, _ ->
+            if (player.hasPotionEffect(PotionEffectType.SPEED)) {
+                t.update(TrackerUpdateAction.composite(
+                    TrackerUpdateAction.glow(true),
+                    TrackerUpdateAction.glowColor(0xFFFF00)
+                ))
+            } else {
+                t.update(TrackerUpdateAction.glow(false))
+            }
+        }
+        
+        // Play attack animation
+        tracker.tick { t, _ ->
+            if (player.attackCooldown == 1.0F) {
+                t.animate("armor_attack", AnimationModifier.builder()
+                    .type(AnimationIterator.Type.PLAY_ONCE)
+                    .speed(2.0F)
+                    .build()
+                )
+            }
+        }
+    }
+}
+```
+</CodeGroup>
+
+## Color-Tinted Armor
+
+### Apply Leather Armor Colors
+
+```java
+import org.bukkit.Color;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
+
+public void applyArmorColor(PlayerTracker tracker, Player player) {
+    ItemStack chestplate = player.getInventory().getChestplate();
+    
+    if (chestplate != null && chestplate.getItemMeta() instanceof LeatherArmorMeta meta) {
+        Color color = meta.getColor();
+        int rgb = (color.getRed() << 16) | (color.getGreen() << 8) | color.getBlue();
+        
+        // Apply tint to chestplate model
+        tracker.update(
+            TrackerUpdateAction.tint(rgb),
+            BonePredicate.name("chestplate")
+        );
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+  - Use player models (limbs) for armor, not general models
+  - Always provide a player profile to ensure correct skin rendering
+  - Update armor visibility dynamically when players change equipment
+  - Cache tracker references to avoid creating duplicates
+</Tip>
+
+<Warning>
+  - Player models require more resources than general models
+  - Limit the number of active player trackers for performance
+  - Always remove trackers when players leave the server
+  - Test armor models with different player skins
+</Warning>
+
+## Complete Example
+
+<CodeGroup>
+```java Java - Full System
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.profile.ModelProfile;
+import kr.toxicity.model.api.tracker.PlayerTracker;
+import kr.toxicity.model.api.tracker.TrackerUpdateAction;
+import kr.toxicity.model.api.util.function.BonePredicate;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.*;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class ArmorSystem implements Listener {
+    
+    private final JavaPlugin plugin;
+    private final Map<UUID, PlayerTracker> trackers = new ConcurrentHashMap<>();
+    
+    public ArmorSystem(JavaPlugin plugin) {
+        this.plugin = plugin;
+    }
+    
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        
+        if (hasCustomArmor(player)) {
+            applyCustomArmor(player);
+        }
+    }
+    
+    private void applyCustomArmor(Player player) {
+        BetterModel.limb("custom_armor").ifPresent(renderer -> {
+            PlayerTracker tracker = (PlayerTracker) renderer.getOrCreate(
+                BaseEntity.of(player),
+                ModelProfile.of(player)
+            );
+            
+            trackers.put(player.getUniqueId(), tracker);
+            updateArmorParts(player, tracker);
+            tracker.animate("idle");
+        });
+    }
+    
+    private void updateArmorParts(Player player, PlayerTracker tracker) {
+        boolean hasHelmet = player.getInventory().getHelmet() != null;
+        boolean hasChestplate = player.getInventory().getChestplate() != null;
+        boolean hasLeggings = player.getInventory().getLeggings() != null;
+        boolean hasBoots = player.getInventory().getBoots() != null;
+        
+        tracker.update(TrackerUpdateAction.togglePart(hasHelmet), BonePredicate.name("helmet"));
+        tracker.update(TrackerUpdateAction.togglePart(hasChestplate), BonePredicate.name("chestplate"));
+        tracker.update(TrackerUpdateAction.togglePart(hasLeggings), BonePredicate.name("leggings"));
+        tracker.update(TrackerUpdateAction.togglePart(hasBoots), BonePredicate.name("boots"));
+    }
+    
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        PlayerTracker tracker = trackers.remove(event.getPlayer().getUniqueId());
+        if (tracker != null) {
+            tracker.close();
+        }
+    }
+    
+    private boolean hasCustomArmor(Player player) {
+        // Your logic to check if player should have custom armor
+        return player.hasPermission("customarmor.use");
+    }
+}
+```
+
+```kotlin Kotlin - Full System
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.profile.ModelProfile
+import kr.toxicity.model.api.tracker.PlayerTracker
+import kr.toxicity.model.api.tracker.TrackerUpdateAction
+import kr.toxicity.model.api.util.function.BonePredicate
+import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.player.*
+import org.bukkit.plugin.java.JavaPlugin
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+class ArmorSystem(private val plugin: JavaPlugin) : Listener {
+    
+    private val trackers = ConcurrentHashMap<UUID, PlayerTracker>()
+    
+    @EventHandler
+    fun onJoin(event: PlayerJoinEvent) {
+        val player = event.player
+        
+        if (hasCustomArmor(player)) {
+            applyCustomArmor(player)
+        }
+    }
+    
+    private fun applyCustomArmor(player: Player) {
+        BetterModel.limb("custom_armor").ifPresent { renderer ->
+            val tracker = renderer.getOrCreate(
+                BaseEntity.of(player),
+                ModelProfile.of(player)
+            ) as PlayerTracker
+            
+            trackers[player.uniqueId] = tracker
+            updateArmorParts(player, tracker)
+            tracker.animate("idle")
+        }
+    }
+    
+    private fun updateArmorParts(player: Player, tracker: PlayerTracker) {
+        val hasHelmet = player.inventory.helmet != null
+        val hasChestplate = player.inventory.chestplate != null
+        val hasLeggings = player.inventory.leggings != null
+        val hasBoots = player.inventory.boots != null
+        
+        tracker.update(TrackerUpdateAction.togglePart(hasHelmet), BonePredicate.name("helmet"))
+        tracker.update(TrackerUpdateAction.togglePart(hasChestplate), BonePredicate.name("chestplate"))
+        tracker.update(TrackerUpdateAction.togglePart(hasLeggings), BonePredicate.name("leggings"))
+        tracker.update(TrackerUpdateAction.togglePart(hasBoots), BonePredicate.name("boots"))
+    }
+    
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        trackers.remove(event.player.uniqueId)?.close()
+    }
+    
+    private fun hasCustomArmor(player: Player): Boolean {
+        return player.hasPermission("customarmor.use")
+    }
+}
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Player Cosmetics" icon="shirt" href="/examples/player-cosmetics">
+    Learn about cosmetic items and accessories
+  </Card>
+  <Card title="Multi-part Entities" icon="puzzle-piece" href="/examples/multi-part-entities">
+    Create complex multi-model entities
+  </Card>
+  <Card title="Performance Optimization" icon="gauge-high" href="/examples/performance-optimization">
+    Optimize model rendering for large servers
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/tracker">
+    Full Tracker API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,568 @@
+---
+title: Per-Player Animation System
+description: Deep dive into per-player animation states and individual player control
+icon: users
+---
+
+## Overview
+
+BetterModel's **per-player animation system** allows you to show different animation states to different players for the same model instance. This is crucial for:
+
+- MMORPGs with player-specific cutscenes
+- Individual quest progression animations
+- Player-specific NPC interactions
+- Custom emotes visible only to nearby players
+- Conditional visual effects per player
+
+## How Per-Player Animations Work
+
+### Architecture
+
+When you play a per-player animation:
+
+1. The animation is tracked separately for each player
+2. Packets are sent individually to each player
+3. Other players continue to see the default animation
+4. The system manages packet bundlers per player UUID
+
+<Warning>
+Per-player animations increase network overhead and CPU usage. Use them only when necessary and for short durations.
+</Warning>
+
+### Performance Characteristics
+
+- **Normal animation**: 1 packet bundler for all viewers
+- **Per-player animation**: N packet bundlers (one per viewer)
+- **Overhead**: ~N times the network traffic
+
+<Note>
+BetterModel optimizes per-player animations by:
+- Using parallel packet bundlers
+- Reference counting to detect when all per-player animations end
+- Automatic cleanup when no per-player animations are active
+</Note>
+
+## Playing Per-Player Animations
+
+### Basic Per-Player Animation
+
+Play an animation for a specific player:
+
+```java
+import kr.toxicity.model.api.animation.AnimationModifier;
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+import kr.toxicity.model.api.tracker.Tracker;
+import org.bukkit.entity.Player;
+
+Tracker tracker = // your tracker
+Player targetPlayer = // the player who should see the animation
+
+AnimationModifier perPlayer = AnimationModifier.builder()
+    .player(BukkitAdapter.adapt(targetPlayer))  // Specify the target player
+    .type(AnimationIterator.Type.PLAY_ONCE)
+    .build();
+
+tracker.animate("special_effect", perPlayer);
+```
+
+### Multiple Players
+
+Play the same animation for multiple specific players:
+
+```java
+import java.util.List;
+
+List<Player> targetPlayers = // your player list
+
+for (Player player : targetPlayers) {
+    AnimationModifier modifier = AnimationModifier.builder()
+        .player(BukkitAdapter.adapt(player))
+        .type(AnimationIterator.Type.PLAY_ONCE)
+        .build();
+    
+    tracker.animate("quest_complete", modifier);
+}
+```
+
+### Conditional Per-Player Animations
+
+Show different animations based on player state:
+
+```java
+public void playConditionalAnimation(Tracker tracker, Player player, String questId) {
+    String animationName;
+    
+    if (hasCompletedQuest(player, questId)) {
+        animationName = "quest_completed";
+    } else if (hasStartedQuest(player, questId)) {
+        animationName = "quest_active";
+    } else {
+        animationName = "quest_available";
+    }
+    
+    AnimationModifier modifier = AnimationModifier.builder()
+        .player(BukkitAdapter.adapt(player))
+        .build();
+    
+    tracker.animate(animationName, modifier);
+}
+```
+
+## Per-Player Animation Events
+
+### Start Event
+
+Detect when a per-player animation starts:
+
+```java
+import kr.toxicity.model.api.event.PlayerPerAnimationStartEvent;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+
+public class PerPlayerAnimationListener implements Listener {
+    
+    @EventHandler
+    public void onPerPlayerAnimStart(PlayerPerAnimationStartEvent event) {
+        Tracker tracker = event.tracker();
+        PlatformPlayer player = event.player();
+        
+        System.out.println("Per-player animation started for: " + player.name());
+        System.out.println("Model: " + tracker.name());
+        
+        // Track active per-player animations
+        trackAnimation(tracker, player);
+    }
+}
+```
+
+### End Event
+
+Detect when a per-player animation ends:
+
+```java
+import kr.toxicity.model.api.event.PlayerPerAnimationEndEvent;
+
+@EventHandler
+public void onPerPlayerAnimEnd(PlayerPerAnimationEndEvent event) {
+    Tracker tracker = event.tracker();
+    PlatformPlayer player = event.player();
+    
+    System.out.println("Per-player animation ended for: " + player.name());
+    
+    // Cleanup tracking
+    cleanupAnimation(tracker, player);
+}
+```
+
+### Event Use Cases
+
+```java
+public class PerPlayerAnimationTracker {
+    private final Map<UUID, Set<String>> activeAnimations = new ConcurrentHashMap<>();
+    
+    @EventHandler
+    public void onStart(PlayerPerAnimationStartEvent event) {
+        UUID playerId = event.player().uuid();
+        String modelName = event.tracker().name();
+        
+        activeAnimations
+            .computeIfAbsent(playerId, k -> ConcurrentHashMap.newKeySet())
+            .add(modelName);
+        
+        // Prevent too many simultaneous per-player animations
+        if (activeAnimations.get(playerId).size() > 5) {
+            System.out.println("Warning: Too many per-player animations for " + 
+                event.player().name());
+        }
+    }
+    
+    @EventHandler
+    public void onEnd(PlayerPerAnimationEndEvent event) {
+        UUID playerId = event.player().uuid();
+        String modelName = event.tracker().name();
+        
+        Set<String> playerAnims = activeAnimations.get(playerId);
+        if (playerAnims != null) {
+            playerAnims.remove(modelName);
+            if (playerAnims.isEmpty()) {
+                activeAnimations.remove(playerId);
+            }
+        }
+    }
+}
+```
+
+## Stopping Per-Player Animations
+
+### Stop for Specific Player
+
+Stop a per-player animation:
+
+```java
+import kr.toxicity.model.api.platform.PlatformPlayer;
+
+Tracker tracker = // your tracker
+Player player = // target player
+
+boolean stopped = tracker.stopAnimation(
+    bone -> true,  // All bones
+    "quest_animation",
+    BukkitAdapter.adapt(player)
+);
+
+if (stopped) {
+    System.out.println("Per-player animation stopped");
+}
+```
+
+### Stop All Per-Player Animations
+
+Stop all animations for all players:
+
+```java
+tracker.stopAnimation("special_effect"); // Stops for everyone
+```
+
+## Advanced Per-Player Patterns
+
+### Quest Progression System
+
+Show quest progress through animations:
+
+```java
+public class QuestAnimationSystem {
+    
+    public void updateQuestVisuals(Tracker npcTracker, Player player, Quest quest) {
+        AnimationModifier modifier = AnimationModifier.builder()
+            .player(BukkitAdapter.adapt(player))
+            .type(AnimationIterator.Type.LOOP)
+            .build();
+        
+        String animation = switch (quest.getStage()) {
+            case NOT_STARTED -> "quest_available";
+            case IN_PROGRESS -> "quest_active";
+            case READY_TO_COMPLETE -> "quest_ready";
+            case COMPLETED -> "quest_completed";
+        };
+        
+        npcTracker.animate(animation, modifier);
+    }
+    
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        
+        // Update quest visuals for nearby NPCs
+        getNearbyQuestNPCs(player.getLocation()).forEach(npc -> {
+            BetterModel.registry(npc.getUniqueId()).ifPresent(registry -> {
+                registry.trackers().values().forEach(tracker -> {
+                    Quest quest = getQuestForNPC(npc);
+                    updateQuestVisuals(tracker, player, quest);
+                });
+            });
+        });
+    }
+}
+```
+
+### Player-Specific Emotes
+
+Create emotes that only nearby players see:
+
+```java
+public class EmoteSystem {
+    
+    public void playEmote(Player actor, String emoteName, double range) {
+        BetterModel.registry(actor.getUniqueId()).ifPresent(registry -> {
+            registry.trackers().values().forEach(tracker -> {
+                // Get players in range
+                List<Player> viewers = getNearbyPlayers(actor, range);
+                
+                // Play emote for each viewer
+                for (Player viewer : viewers) {
+                    AnimationModifier modifier = AnimationModifier.builder()
+                        .player(BukkitAdapter.adapt(viewer))
+                        .type(AnimationIterator.Type.PLAY_ONCE)
+                        .build();
+                    
+                    tracker.animate(emoteName, modifier, () -> {
+                        tracker.animate("idle");
+                    });
+                }
+            });
+        });
+    }
+    
+    private List<Player> getNearbyPlayers(Player center, double range) {
+        return center.getWorld().getPlayers().stream()
+            .filter(p -> p.getLocation().distance(center.getLocation()) <= range)
+            .filter(p -> !p.equals(center))
+            .toList();
+    }
+}
+```
+
+### Stealth/Invisibility System
+
+Show different models based on player abilities:
+
+```java
+public class StealthSystem {
+    private final Set<UUID> stealthedPlayers = ConcurrentHashMap.newKeySet();
+    
+    public void enterStealth(Player player) {
+        stealthedPlayers.add(player.getUniqueId());
+        
+        BetterModel.registry(player.getUniqueId()).ifPresent(registry -> {
+            registry.trackers().values().forEach(tracker -> {
+                // Show stealth animation to all players
+                tracker.animate("stealth_enter", 
+                    AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+                
+                // Make invisible to players without detection
+                tracker.getPipeline().allPlayer().forEach(viewer -> {
+                    if (!canDetectStealth(viewer)) {
+                        tracker.hide(viewer);
+                    } else {
+                        // Show special "detected" animation
+                        AnimationModifier detected = AnimationModifier.builder()
+                            .player(viewer)
+                            .build();
+                        tracker.animate("stealth_detected", detected);
+                    }
+                });
+            });
+        });
+    }
+    
+    public void exitStealth(Player player) {
+        stealthedPlayers.remove(player.getUniqueId());
+        
+        BetterModel.registry(player.getUniqueId()).ifPresent(registry -> {
+            registry.trackers().values().forEach(tracker -> {
+                // Show to all players
+                tracker.getPipeline().allPlayer().forEach(tracker::show);
+                
+                // Play exit animation
+                tracker.animate("stealth_exit", 
+                    AnimationModifier.DEFAULT_WITH_PLAY_ONCE,
+                    () -> tracker.animate("idle")
+                );
+            });
+        });
+    }
+    
+    private boolean canDetectStealth(PlatformPlayer viewer) {
+        // Check if player has detection ability
+        return false; // Implement your logic
+    }
+}
+```
+
+### Cinematic Cutscenes
+
+Create player-specific cutscenes:
+
+```java
+public class CutsceneSystem {
+    
+    public void playCutscene(Player player, String cutsceneName) {
+        List<CutsceneFrame> frames = loadCutscene(cutsceneName);
+        
+        playCutsceneFrames(player, frames, 0);
+    }
+    
+    private void playCutsceneFrames(Player player, List<CutsceneFrame> frames, int index) {
+        if (index >= frames.size()) {
+            onCutsceneEnd(player);
+            return;
+        }
+        
+        CutsceneFrame frame = frames.get(index);
+        Tracker tracker = getOrCreateCutsceneActor(frame.actorModel, frame.location);
+        
+        AnimationModifier perPlayer = AnimationModifier.builder()
+            .player(BukkitAdapter.adapt(player))
+            .type(AnimationIterator.Type.PLAY_ONCE)
+            .speed(frame.speed)
+            .build();
+        
+        tracker.animate(frame.animation, perPlayer, () -> {
+            // Schedule next frame
+            Bukkit.getScheduler().runTaskLater(
+                plugin,
+                () -> playCutsceneFrames(player, frames, index + 1),
+                frame.durationTicks
+            );
+        });
+        
+        // Execute frame actions (dialogue, effects, etc.)
+        frame.actions.forEach(action -> action.execute(player));
+    }
+    
+    private void onCutsceneEnd(Player player) {
+        player.sendMessage("Cutscene complete!");
+    }
+    
+    private static class CutsceneFrame {
+        String actorModel;
+        Location location;
+        String animation;
+        float speed;
+        long durationTicks;
+        List<CutsceneAction> actions;
+    }
+}
+```
+
+## Performance Optimization
+
+### Limit Per-Player Animation Count
+
+```java
+public class PerPlayerAnimationLimiter {
+    private final Map<UUID, Integer> playerAnimCounts = new ConcurrentHashMap<>();
+    private static final int MAX_PER_PLAYER_ANIMS = 3;
+    
+    public boolean canPlayPerPlayerAnimation(Player player) {
+        int count = playerAnimCounts.getOrDefault(player.getUniqueId(), 0);
+        return count < MAX_PER_PLAYER_ANIMS;
+    }
+    
+    @EventHandler
+    public void onStart(PlayerPerAnimationStartEvent event) {
+        UUID playerId = event.player().uuid();
+        playerAnimCounts.merge(playerId, 1, Integer::sum);
+    }
+    
+    @EventHandler
+    public void onEnd(PlayerPerAnimationEndEvent event) {
+        UUID playerId = event.player().uuid();
+        playerAnimCounts.computeIfPresent(playerId, (k, v) -> v > 1 ? v - 1 : null);
+    }
+}
+```
+
+### Range-Based Per-Player Animations
+
+Only show per-player animations to nearby players:
+
+```java
+public void playNearbyPerPlayerAnimation(
+    Tracker tracker,
+    Location center,
+    double range,
+    String animation
+) {
+    center.getWorld().getPlayers().stream()
+        .filter(p -> p.getLocation().distance(center) <= range)
+        .forEach(player -> {
+            AnimationModifier modifier = AnimationModifier.builder()
+                .player(BukkitAdapter.adapt(player))
+                .type(AnimationIterator.Type.PLAY_ONCE)
+                .build();
+            
+            tracker.animate(animation, modifier);
+        });
+}
+```
+
+### Cleanup on Player Leave
+
+Ensure per-player animations are cleaned up:
+
+```java
+@EventHandler
+public void onPlayerQuit(PlayerQuitEvent event) {
+    UUID playerId = event.getPlayer().getUniqueId();
+    
+    // Per-player animations are automatically cleaned up by BetterModel
+    // when the player disconnects, but you can add custom cleanup here
+    
+    // Stop all per-player animations for this player
+    BetterModel.models().forEach(model -> {
+        model.flatten().forEach(group -> {
+            // Custom cleanup logic if needed
+        });
+    });
+}
+```
+
+## Best Practices
+
+<Note>
+**Performance Guidelines:**
+- Use per-player animations sparingly (max 2-3 per player)
+- Keep per-player animations short (< 5 seconds)
+- Limit range to nearby players only
+- Clean up finished animations promptly
+- Monitor active per-player animation count
+</Note>
+
+<Warning>
+**Common Mistakes:**
+- Playing per-player animations for all online players
+- Looping per-player animations indefinitely
+- Not cleaning up on player disconnect
+- Creating new AnimationModifier instances every tick
+- Using per-player animations for permanent state changes
+</Warning>
+
+### When to Use Per-Player Animations
+
+**Good use cases:**
+- Quest progression indicators
+- Player-specific cutscenes
+- Conditional visual effects
+- Temporary emotes
+- Stealth/detection systems
+
+**Bad use cases:**
+- Permanent model states (use separate trackers)
+- Continuous animations (use normal animations)
+- Global effects (use normal animations)
+- High-frequency updates (too much overhead)
+
+## Debugging Per-Player Animations
+
+### Logging Active Animations
+
+```java
+public void debugPerPlayerAnimations(Tracker tracker) {
+    System.out.println("=== Per-Player Animation Debug ===");
+    System.out.println("Tracker: " + tracker.name());
+    System.out.println("Total viewers: " + tracker.playerCount());
+    
+    // Note: Internal per-player state is managed by BetterModel
+    // Events are the best way to track per-player animation state
+}
+```
+
+### Testing Per-Player Animations
+
+```java
+public void testPerPlayerAnimation(Player testPlayer, Tracker tracker) {
+    System.out.println("Testing per-player animation for: " + testPlayer.getName());
+    
+    AnimationModifier modifier = AnimationModifier.builder()
+        .player(BukkitAdapter.adapt(testPlayer))
+        .type(AnimationIterator.Type.PLAY_ONCE)
+        .build();
+    
+    boolean success = tracker.animate("test_animation", modifier);
+    System.out.println("Animation started: " + success);
+    
+    // The animation should only be visible to testPlayer
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Resource Pack Generation" icon="box" href="/guides/resource-pack-generation">
+    Understand automatic resource pack creation
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/bettermodel">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

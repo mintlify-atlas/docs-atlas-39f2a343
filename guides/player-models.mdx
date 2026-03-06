@@ -1,0 +1,518 @@
+---
+title: Player Models
+description: Working with 12-limb player animation system
+icon: user
+---
+
+## Overview
+
+BetterModel provides a sophisticated **12-limb player animation system** that allows you to create custom player models with full-body animations while maintaining compatibility with armor, elytra, and player skins.
+
+## Understanding Player Limbs
+
+### The 12-Limb System
+
+BetterModel's player models consist of 12 independent limbs:
+
+1. **Head**
+2. **Body**
+3. **Left Arm**
+4. **Right Arm**
+5. **Left Leg**
+6. **Right Leg**
+7. **Left Arm Layer** (outer layer)
+8. **Right Arm Layer** (outer layer)
+9. **Left Leg Layer** (outer layer)
+10. **Right Leg Layer** (outer layer)
+11. **Cape**
+12. **Elytra** (when equipped)
+
+This structure mirrors the vanilla player model with additional layer support for advanced customization.
+
+### Player Model Directory
+
+Place player limb models in the `players/` directory:
+
+```
+plugins/
+└── BetterModel/
+    └── players/
+        ├── steve.bbmodel
+        ├── alex.bbmodel
+        └── custom_hero.bbmodel
+```
+
+<Note>
+Player limb models are **not saved** persistently. They must be recreated when a player joins the server.
+</Note>
+
+## Creating Player Models
+
+### BlockBench Setup
+
+In BlockBench, structure your player model with proper limb names:
+
+```
+player_root
+├── head
+├── body
+├── left_arm
+├── right_arm
+├── left_leg
+├── right_leg
+├── left_arm_layer
+├── right_arm_layer
+├── left_leg_layer
+├── right_leg_layer
+└── cape
+```
+
+<Tip>
+Use the exact limb names above for automatic recognition and proper synchronization with player movements.
+</Tip>
+
+### Limb Tags
+
+Tag specific limbs for automatic behavior:
+
+- **`player_tag`**: Always visible nametag
+- **`head`**: Head rotation tracking
+- **`head_with_children`**: Head rotation including child bones
+
+## Loading Player Models
+
+### Basic Loading
+
+Load a player limb model from the API:
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.data.renderer.ModelRenderer;
+
+ModelRenderer limbModel = BetterModel.limb("steve").orElse(null);
+
+if (limbModel != null) {
+    System.out.println("Limb model loaded: " + limbModel.name());
+}
+```
+
+### Applying to Players
+
+Create a player tracker:
+
+```java
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import org.bukkit.entity.Player;
+
+Player player = // your player
+
+EntityTracker tracker = BetterModel.limb("custom_hero")
+    .map(r -> r.getOrCreate(BukkitAdapter.adapt(player)))
+    .orElse(null);
+
+if (tracker != null) {
+    tracker.animate("idle");
+}
+```
+
+### Simplified Player Animation API
+
+Use the ModelManager for quick player animations:
+
+```java
+import kr.toxicity.model.api.animation.AnimationModifier;
+
+// Play an animation on a player
+boolean success = BetterModel.platform().modelManager().animate(
+    BukkitAdapter.adapt(player),
+    "custom_hero",
+    "wave",
+    AnimationModifier.DEFAULT_WITH_PLAY_ONCE
+);
+```
+
+## Player Tracking and Movement
+
+### Body Rotator
+
+Player trackers use `EntityBodyRotator` in player mode for correct body/head rotation:
+
+```java
+import kr.toxicity.model.api.tracker.PlayerTracker;
+
+if (tracker instanceof PlayerTracker playerTracker) {
+    // Body rotator is automatically set to player mode
+    var bodyRotator = playerTracker.bodyRotator();
+    
+    // Access rotation data
+    bodyRotator.setValue(setter -> {
+        // Configure custom rotation behavior if needed
+    });
+}
+```
+
+### Automatic Synchronization
+
+Player models automatically sync with:
+
+- **Position**: Follows player location
+- **Rotation**: Matches player head and body rotation
+- **Animations**: Syncs with player movements
+- **Potion effects**: Applies invisibility and other effects
+
+## Working with Player Skins
+
+### Using Player Skin Textures
+
+Apply a player's skin to a model:
+
+```java
+import kr.toxicity.model.api.profile.ModelProfile;
+
+Player player = // your player
+
+// Create model with player's skin
+DummyTracker tracker = BetterModel.limb("steve")
+    .map(r -> r.create(
+        BukkitAdapter.adapt(location),
+        ModelProfile.of(BukkitAdapter.adapt(player))
+    ))
+    .orElse(null);
+```
+
+### Custom Skin Profiles
+
+Use a custom skin profile:
+
+```java
+import kr.toxicity.model.api.profile.ModelProfileInfo;
+import kr.toxicity.model.api.profile.ModelProfileSkin;
+
+// Create from skin data
+ModelProfileSkin skin = // your skin data
+ModelProfile profile = ModelProfile.of(
+    ModelProfileInfo.of("CustomPlayer"),
+    skin
+);
+
+DummyTracker tracker = BetterModel.limb("steve")
+    .map(r -> r.create(
+        BukkitAdapter.adapt(location),
+        profile
+    ))
+    .orElse(null);
+```
+
+### Skin Parts Control
+
+Control which skin parts are visible:
+
+```java
+import kr.toxicity.model.api.player.PlayerSkinParts;
+
+// This is typically handled automatically by the player's client settings
+// but can be accessed for custom logic
+```
+
+## Player Animations
+
+### Standard Player Animations
+
+Create animations for common player actions:
+
+- **idle**: Standing still
+- **walk**: Walking
+- **run**: Sprinting
+- **sneak**: Sneaking
+- **swim**: Swimming
+- **jump**: Jumping
+- **attack**: Attacking/mining
+- **use**: Using items
+- **bow_draw**: Drawing a bow
+- **throw**: Throwing items
+
+### Playing Player Animations
+
+```java
+import kr.toxicity.model.api.animation.AnimationModifier;
+
+// Idle animation (loop)
+tracker.animate("idle");
+
+// Walk animation with speed matching
+AnimationModifier walk = AnimationModifier.builder()
+    .speed(() -> player.isSprinting() ? 1.5F : 1.0F)
+    .build();
+tracker.animate("walk", walk);
+
+// Attack animation (once)
+tracker.animate("attack", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+```
+
+### Animation State Management
+
+Implement player animation states:
+
+```java
+public class PlayerAnimationController {
+    private final Map<Player, EntityTracker> trackers = new HashMap<>();
+    
+    public void updatePlayerState(Player player) {
+        EntityTracker tracker = trackers.get(player);
+        if (tracker == null) return;
+        
+        // Determine animation state
+        if (player.isSneaking()) {
+            tracker.replace("walk", "sneak", AnimationModifier.DEFAULT);
+        } else if (player.isSprinting()) {
+            tracker.replace("walk", "run", AnimationModifier.DEFAULT);
+        } else if (player.isSwimming()) {
+            tracker.replace("walk", "swim", AnimationModifier.DEFAULT);
+        } else if (player.getVelocity().getY() > 0) {
+            tracker.animate("jump", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+        } else if (player.getVelocity().lengthSquared() > 0.01) {
+            tracker.animate("walk");
+        } else {
+            tracker.animate("idle");
+        }
+    }
+}
+```
+
+## Player Model Events
+
+### Creating Player Tracker Event
+
+```java
+import kr.toxicity.model.api.event.CreateEntityTrackerEvent;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+
+public class PlayerModelListener implements Listener {
+    
+    @EventHandler
+    public void onPlayerTrackerCreate(CreateEntityTrackerEvent event) {
+        if (event.tracker() instanceof PlayerTracker playerTracker) {
+            System.out.println("Player model created");
+            
+            // Initialize default animation
+            playerTracker.animate("idle");
+        }
+    }
+}
+```
+
+### Player Join/Leave Handling
+
+```java
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+
+@EventHandler
+public void onPlayerJoin(PlayerJoinEvent event) {
+    Player player = event.getPlayer();
+    
+    // Create player model on join
+    BetterModel.limb("custom_hero")
+        .ifPresent(model -> {
+            model.getOrCreate(
+                BukkitAdapter.adapt(player),
+                TrackerModifier.DEFAULT,
+                tracker -> tracker.animate("spawn", AnimationModifier.DEFAULT_WITH_PLAY_ONCE)
+            );
+        });
+}
+
+@EventHandler
+public void onPlayerQuit(PlayerQuitEvent event) {
+    Player player = event.getPlayer();
+    
+    // Remove player model on quit
+    BetterModel.registry(player.getUniqueId()).ifPresent(registry -> {
+        registry.trackers().values().forEach(EntityTracker::close);
+    });
+}
+```
+
+## Armor and Equipment
+
+### Armor Rendering
+
+BetterModel integrates with the [ArmorModel](https://github.com/toxicity188/ArmorModel) library to render armor on custom player models:
+
+```java
+// Armor is automatically rendered on appropriate limbs
+// when using proper limb names and structure
+```
+
+### Equipment Slots
+
+Handle equipment changes:
+
+```java
+import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.inventory.ItemStack;
+
+@EventHandler
+public void onItemHeld(PlayerItemHeldEvent event) {
+    Player player = event.getPlayer();
+    ItemStack item = player.getInventory().getItem(event.getNewSlot());
+    
+    BetterModel.registry(player.getUniqueId()).ifPresent(registry -> {
+        registry.trackers().values().forEach(tracker -> {
+            // Update animations based on held item
+            if (item != null && item.getType().name().contains("SWORD")) {
+                tracker.animate("hold_sword");
+            } else {
+                tracker.animate("idle");
+            }
+        });
+    });
+}
+```
+
+## Advanced Player Model Features
+
+### Custom Player Hitboxes
+
+Add interactive hitboxes to player models:
+
+```java
+tracker.createHitBox(
+    HitBoxListener.builder()
+        .interact(event -> {
+            Player clicker = // get player from event
+            Player target = (Player) tracker.sourceEntity().handle();
+            
+            clicker.sendMessage("You clicked " + target.getName());
+        })
+        .build(),
+    BonePredicate.name("head")
+);
+```
+
+### Dynamic Player Model Switching
+
+Switch between different player models:
+
+```java
+public void switchPlayerModel(Player player, String newModel) {
+    // Remove current model
+    BetterModel.registry(player.getUniqueId()).ifPresent(registry -> {
+        registry.trackers().values().forEach(EntityTracker::close);
+    });
+    
+    // Apply new model
+    BetterModel.limb(newModel).ifPresent(model -> {
+        model.getOrCreate(
+            BukkitAdapter.adapt(player),
+            TrackerModifier.DEFAULT,
+            tracker -> tracker.animate("idle")
+        );
+    });
+}
+```
+
+### Per-Player Model Visibility
+
+Show different models to different players:
+
+```java
+public void setModelVisibility(EntityTracker tracker, Player viewer, boolean visible) {
+    if (visible) {
+        tracker.show(BukkitAdapter.adapt(viewer));
+    } else {
+        tracker.hide(BukkitAdapter.adapt(viewer));
+    }
+}
+```
+
+## Best Practices
+
+<Note>
+**Performance Considerations:**
+- Player models are computationally intensive
+- Limit the number of simultaneous player models
+- Use `sightTrace` in TrackerModifier to reduce rendering
+- Cache tracker references
+- Clean up trackers on player disconnect
+</Note>
+
+<Warning>
+**Common Pitfalls:**
+- Player models don't persist across restarts
+- Limb names must match exactly for proper synchronization
+- Armor rendering requires correct bone structure
+- Player models require the `players/` directory, not `models/`
+</Warning>
+
+### Model Organization
+
+```
+players/
+├── base/
+│   ├── steve.bbmodel
+│   └── alex.bbmodel
+├── classes/
+│   ├── warrior.bbmodel
+│   ├── mage.bbmodel
+│   └── archer.bbmodel
+└── custom/
+    └── hero.bbmodel
+```
+
+## Example: RPG Class System
+
+```java
+public class RPGClassSystem {
+    private final Map<UUID, String> playerClasses = new HashMap<>();
+    
+    public void setPlayerClass(Player player, String className) {
+        playerClasses.put(player.getUniqueId(), className);
+        
+        // Remove existing model
+        BetterModel.registry(player.getUniqueId()).ifPresent(registry -> {
+            registry.trackers().values().forEach(EntityTracker::close);
+        });
+        
+        // Apply class model
+        String modelName = "class_" + className.toLowerCase();
+        BetterModel.limb(modelName).ifPresent(model -> {
+            EntityTracker tracker = model.getOrCreate(
+                BukkitAdapter.adapt(player),
+                TrackerModifier.DEFAULT,
+                t -> {
+                    t.animate("class_select", 
+                        AnimationModifier.DEFAULT_WITH_PLAY_ONCE,
+                        () -> t.animate("idle")
+                    );
+                }
+            );
+            
+            // Add class-specific interactions
+            setupClassAbilities(tracker, className);
+        });
+    }
+    
+    private void setupClassAbilities(EntityTracker tracker, String className) {
+        // Add custom abilities based on class
+        switch (className) {
+            case "warrior" -> tracker.animate("battle_stance");
+            case "mage" -> tracker.animate("casting_idle");
+            case "archer" -> tracker.animate("bow_ready");
+        }
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Per-Player Animation" icon="users" href="/guides/per-player-animation">
+    Advanced per-player animation techniques
+  </Card>
+  <Card title="Resource Pack Generation" icon="box" href="/guides/resource-pack-generation">
+    Understand automatic resource pack creation
+  </Card>
+</CardGroup>

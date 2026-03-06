@@ -1,0 +1,294 @@
+---
+title: BonePredicate
+description: Functional interface for filtering and matching bones in the model hierarchy
+---
+
+The `BonePredicate` interface extends `Predicate<RenderedBone>` to provide advanced filtering capabilities with child bone propagation control. It's the primary way to select specific bones for operations.
+
+## Class Information
+
+**Package:** `kr.toxicity.model.api.util.function`  
+**Type:** Interface  
+**Extends:** `Predicate<RenderedBone>`  
+**Since:** 1.0.0
+
+## Core Methods
+
+```java
+boolean test(RenderedBone bone)
+BonePredicate and(Predicate<? super RenderedBone> other)
+BonePredicate or(Predicate<? super RenderedBone> other)
+BonePredicate negate()
+State applyAtChildren()
+```
+
+## Factory Methods
+
+### By Name
+
+```java
+public static BonePredicate.Builder name(String name)
+```
+
+Creates a predicate that matches bones by name (case-insensitive).
+
+**Example:**
+```java
+// Match bone by name
+BonePredicate headPredicate = BonePredicate.name("head")
+    .withChildren();
+
+// Apply to all head bones and their children
+renderedBone.matchTree(headPredicate, (bone, pred) -> {
+    bone.tint(b -> true, 0xFF0000); // Tint red
+    return true;
+});
+```
+
+### By Tag
+
+```java
+public static BonePredicate.Builder tag(BoneTag... tags)
+```
+
+Creates a predicate that matches bones containing any of the specified tags.
+
+**Example:**
+```java
+// Match any bone with "hitbox" or "interactive" tag
+BonePredicate interactivePredicate = BonePredicate.tag(
+    BoneTag.of("hitbox"),
+    BoneTag.of("interactive")
+).withChildren();
+
+// Create hitboxes for all matching bones
+renderedBone.flatten()
+    .filter(interactivePredicate)
+    .forEach(bone -> bone.createHitBox(entity, b -> true, listener));
+```
+
+### From Custom Predicate
+
+```java
+public static BonePredicate from(Predicate<RenderedBone> predicate)
+public static BonePredicate of(State applyAtChildren, Predicate<RenderedBone> predicate)
+```
+
+Wraps a standard predicate as a `BonePredicate`.
+
+**Example:**
+```java
+// Custom predicate based on position
+BonePredicate aboveOrigin = BonePredicate.from(
+    bone -> bone.worldPosition().y > 0
+);
+
+// With explicit child state
+BonePredicate withState = BonePredicate.of(
+    BonePredicate.State.TRUE,
+    bone -> bone.name().name().startsWith("weapon")
+);
+```
+
+## Constants
+
+```java
+BonePredicate TRUE  // Always matches
+BonePredicate FALSE // Never matches
+```
+
+**Example:**
+```java
+// Apply to all bones
+renderedBone.tint(BonePredicate.TRUE, 0xFFFFFF);
+
+// Skip all bones
+renderedBone.itemStack(BonePredicate.FALSE, newStack);
+```
+
+## Child State Control
+
+The `State` enum controls whether predicates apply to child bones:
+
+```java
+enum State {
+    TRUE,     // Apply to children too
+    FALSE,    // Don't apply to children
+    NOT_SET   // Ignore parent's result, re-evaluate
+}
+```
+
+### State Behavior Examples
+
+```java
+// TRUE: Match parent and all children
+BonePredicate.name("body").withChildren();
+// Matches: body, body.arm, body.arm.hand
+
+// FALSE: Match only parent, skip children
+BonePredicate.name("body").withoutChildren();
+// Matches: body only
+
+// NOT_SET: Re-evaluate each bone independently
+BonePredicate.name("body").notSet();
+// Matches: body, and any child also named "body"
+```
+
+## Builder Interface
+
+The `BonePredicate.Builder` provides fluent methods to configure child state:
+
+```java
+interface Builder extends Predicate<RenderedBone> {
+    BonePredicate notSet();
+    BonePredicate withChildren();
+    BonePredicate withoutChildren();
+    BonePredicate build(State state);
+    
+    Builder and(Predicate<? super RenderedBone> other);
+    Builder or(Predicate<? super RenderedBone> other);
+    Builder negate();
+}
+```
+
+### Building Predicates
+
+**Example:**
+```java
+// Combine multiple conditions
+BonePredicate weaponHeads = BonePredicate.tag(BoneTag.of("weapon"))
+    .and(bone -> bone.name().name().contains("head"))
+    .withChildren();
+
+// Negate conditions
+BonePredicate notHitbox = BonePredicate.tag(BoneTag.of("hitbox"))
+    .negate()
+    .withoutChildren();
+
+// Complex OR conditions
+BonePredicate leftOrRight = BonePredicate.tag(BoneTag.of("left_hand"))
+    .or(BonePredicate.tag(BoneTag.of("right_hand")))
+    .notSet();
+```
+
+## Common Usage Patterns
+
+### Filtering Bone Streams
+
+```java
+// Find all weapon bones
+List<RenderedBone> weapons = renderedBone.flatten()
+    .filter(BonePredicate.tag(BoneTag.of("weapon")))
+    .toList();
+
+// Count bones matching predicate
+long count = renderedBone.flatten()
+    .filter(BonePredicate.name("armor"))
+    .count();
+```
+
+### Conditional Operations
+
+```java
+// Apply tint only to matching bones
+BonePredicate damaged = BonePredicate.tag(BoneTag.of("damageable"));
+renderedBone.tint(damaged, 0xFF0000);
+
+// Update items for specific bones
+BonePredicate hands = BonePredicate.tag(
+    BoneTag.of("left_hand"),
+    BoneTag.of("right_hand")
+);
+renderedBone.updateItem(hands);
+```
+
+### Hierarchical Matching
+
+```java
+// Match entire subtree
+BonePredicate armorTree = BonePredicate.name("armor").withChildren();
+renderedBone.matchTree(armorTree, (bone, pred) -> {
+    System.out.println("Processing: " + bone.name());
+    // Apply operation
+    return true;
+});
+
+// Match only specific level
+BonePredicate rootOnly = BonePredicate.name("root").withoutChildren();
+renderedBone.matchTree(rootOnly, (bone, pred) -> {
+    // Only processes root, skips children
+    return true;
+});
+```
+
+### Animation Control
+
+```java
+// Stop animations on specific bones
+BonePredicate animatedBones = BonePredicate.tag(BoneTag.of("animated"));
+renderedBone.stopAnimation(
+    animatedBones,
+    "idle_animation",
+    player
+);
+```
+
+### Hitbox Creation
+
+```java
+// Create hitboxes for tagged bones only
+BonePredicate hitboxBones = BonePredicate.tag(BoneTag.of("hitbox"))
+    .withoutChildren(); // Don't propagate to children
+
+renderedBone.flatten()
+    .forEach(bone -> bone.createHitBox(
+        entity,
+        hitboxBones,
+        listener
+    ));
+```
+
+## Advanced Combinations
+
+```java
+// Match weapons that are not in the left hand
+BonePredicate rightWeapons = BonePredicate.tag(BoneTag.of("weapon"))
+    .and(BonePredicate.tag(BoneTag.of("left_hand")).negate())
+    .withChildren();
+
+// Match any armor or shield
+BonePredicate protective = BonePredicate.name("armor")
+    .or(BonePredicate.name("shield"))
+    .notSet();
+
+// Complex hierarchical matching
+BonePredicate complexPredicate = BonePredicate.tag(BoneTag.of("interactive"))
+    .and(bone -> !bone.isDummyBone())
+    .and(bone -> bone.getDisplay() != null)
+    .withChildren();
+```
+
+## Performance Tips
+
+1. **Reuse predicates** - Create once, use multiple times
+2. **Use `withoutChildren()` when possible** - Reduces unnecessary checks
+3. **Combine filters efficiently** - Put most restrictive conditions first
+4. **Cache results** - Store filtered bone lists if used repeatedly
+
+**Example:**
+```java
+// Good: Reuse predicate
+BonePredicate weaponPredicate = BonePredicate.tag(BoneTag.of("weapon"));
+renderedBone.tint(weaponPredicate, 0xFF0000);
+renderedBone.enchant(weaponPredicate, true);
+
+// Less efficient: Create predicate each time
+renderedBone.tint(BonePredicate.tag(BoneTag.of("weapon")), 0xFF0000);
+renderedBone.enchant(BonePredicate.tag(BoneTag.of("weapon")), true);
+```
+
+## See Also
+
+- [RenderedBone](/api/rendered-bone) - Bone operations accepting predicates
+- [BoneName](/api/bone-name) - Bone identification and tagging
+- [BoneTag](/api/bone-tag) - Tag system for bones

@@ -1,0 +1,384 @@
+---
+title: Basic Entity Model
+description: Learn how to create and spawn a basic entity model using BetterModel
+icon: cube
+---
+
+This guide walks you through creating your first entity-based model with BetterModel.
+
+## Overview
+
+Entity models are 3D models attached to Minecraft entities. They follow the entity's position, rotation, and can respond to entity events like damage.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Prepare Your Model">
+    Create a BlockBench model and export it as `.bbmodel` format. Place it in `BetterModel/models/` directory.
+  </Step>
+  
+  <Step title="Add Plugin Dependency">
+    Add BetterModel API to your `build.gradle` or `pom.xml`:
+    
+    ```gradle
+    repositories {
+        mavenCentral()
+    }
+    
+    dependencies {
+        compileOnly("io.github.toxicity188:bettermodel-bukkit-api:2.2.0")
+    }
+    ```
+  </Step>
+</Steps>
+
+## Basic Implementation
+
+### Creating an Entity Model
+
+Here's how to spawn a basic entity model:
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import org.bukkit.entity.Zombie;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntitySpawnEvent;
+
+public class BasicModelListener implements Listener {
+    
+    @EventHandler
+    public void onEntitySpawn(EntitySpawnEvent event) {
+        if (!(event.getEntity() instanceof Zombie zombie)) return;
+        
+        // Get the model renderer
+        BetterModel.model("demon_knight").ifPresent(renderer -> {
+            // Create entity tracker
+            EntityTracker tracker = renderer.create(
+                BaseEntity.of(zombie)
+            );
+            
+            // Model is now attached and will render automatically
+        });
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import org.bukkit.entity.Zombie
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.entity.EntitySpawnEvent
+
+class BasicModelListener : Listener {
+    
+    @EventHandler
+    fun onEntitySpawn(event: EntitySpawnEvent) {
+        val zombie = event.entity as? Zombie ?: return
+        
+        // Get the model renderer and create tracker
+        BetterModel.model("demon_knight").ifPresent { renderer ->
+            val tracker = renderer.create(BaseEntity.of(zombie))
+            // Model is now attached and will render automatically
+        }
+    }
+}
+```
+</CodeGroup>
+
+### Getting or Creating Models
+
+Use `getOrCreate()` to avoid creating duplicate models:
+
+<CodeGroup>
+```java Java
+// Gets existing tracker or creates new one
+EntityTracker tracker = BetterModel.model("demon_knight")
+    .map(renderer -> renderer.getOrCreate(BaseEntity.of(entity)))
+    .orElse(null);
+```
+
+```kotlin Kotlin
+// Gets existing tracker or creates new one
+val tracker = BetterModel.model("demon_knight")
+    .map { it.getOrCreate(BaseEntity.of(entity)) }
+    .orElse(null)
+```
+</CodeGroup>
+
+## Playing Animations
+
+### Basic Animation
+
+<CodeGroup>
+```java Java
+// Play the "walk" animation
+tracker.animate("walk");
+
+// Play with custom settings
+tracker.animate("attack", AnimationModifier.builder()
+    .start(5)  // 5 tick fade-in
+    .end(5)    // 5 tick fade-out
+    .speed(1.5F) // 1.5x speed
+    .build()
+);
+```
+
+```kotlin Kotlin
+// Play the "walk" animation
+tracker.animate("walk")
+
+// Play with custom settings
+tracker.animate("attack", AnimationModifier.builder()
+    .start(5)  // 5 tick fade-in
+    .end(5)    // 5 tick fade-out
+    .speed(1.5F) // 1.5x speed
+    .build()
+)
+```
+</CodeGroup>
+
+### Stop Animation
+
+```java
+// Stop specific animation
+tracker.stopAnimation("walk");
+
+// Stop all animations on filtered bones
+tracker.stopAnimation(bone -> bone.name().value().contains("arm"), "attack");
+```
+
+## Updating Model Properties
+
+### Change Colors and Effects
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.tracker.TrackerUpdateAction;
+
+// Apply red tint (RGB)
+tracker.update(TrackerUpdateAction.tint(0xFF0000));
+
+// Enable glow effect
+tracker.update(TrackerUpdateAction.glow(true));
+
+// Set custom brightness (block light, sky light)
+tracker.update(TrackerUpdateAction.brightness(15, 15));
+
+// Composite multiple updates
+tracker.update(TrackerUpdateAction.composite(
+    TrackerUpdateAction.glow(true),
+    TrackerUpdateAction.glowColor(0x00FF00),
+    TrackerUpdateAction.enchant(true)
+));
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.tracker.TrackerUpdateAction
+
+// Apply red tint (RGB)
+tracker.update(TrackerUpdateAction.tint(0xFF0000))
+
+// Enable glow effect
+tracker.update(TrackerUpdateAction.glow(true))
+
+// Set custom brightness (block light, sky light)
+tracker.update(TrackerUpdateAction.brightness(15, 15))
+
+// Composite multiple updates
+tracker.update(TrackerUpdateAction.composite(
+    TrackerUpdateAction.glow(true),
+    TrackerUpdateAction.glowColor(0x00FF00),
+    TrackerUpdateAction.enchant(true)
+))
+```
+</CodeGroup>
+
+## Managing Model Lifecycle
+
+### Closing and Cleanup
+
+```java
+// Close and remove model (calls despawn packets)
+tracker.close();
+
+// Just despawn without closing
+tracker.despawn();
+
+// Check if tracker is closed
+if (tracker.isClosed()) {
+    // Handle closed tracker
+}
+```
+
+### Handle Close Events
+
+```java
+tracker.handleCloseEvent((t, reason) -> {
+    switch (reason) {
+        case REMOVE -> System.out.println("Model manually removed");
+        case DESPAWN -> System.out.println("Entity despawned");
+        case PLUGIN_DISABLE -> System.out.println("Plugin disabled");
+    }
+});
+```
+
+## Player Visibility Control
+
+```java
+import org.bukkit.entity.Player;
+
+// Hide model from specific player
+tracker.hide(player);
+
+// Show model to specific player
+tracker.show(player);
+
+// Check if hidden
+if (tracker.isHide(player)) {
+    tracker.show(player);
+}
+```
+
+## Best Practices
+
+<Tip>
+  - Always use `getOrCreate()` instead of `create()` to prevent duplicate trackers
+  - Store tracker references in a map keyed by entity UUID for easy retrieval
+  - Close trackers when entities are removed to prevent memory leaks
+  - Use `Optional` to safely handle cases where models don't exist
+</Tip>
+
+<Warning>
+  - Creating multiple trackers for the same entity can cause visual glitches
+  - Always check if a model exists before trying to create a tracker
+  - Trackers are not automatically removed when entities die - handle cleanup manually
+</Warning>
+
+## Complete Example
+
+<CodeGroup>
+```java Java - Complete System
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import kr.toxicity.model.api.tracker.TrackerUpdateAction;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.*;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class ModelSystem implements Listener {
+    
+    private final Map<UUID, EntityTracker> trackers = new ConcurrentHashMap<>();
+    
+    @EventHandler
+    public void onSpawn(EntitySpawnEvent event) {
+        if (!(event.getEntity() instanceof LivingEntity entity)) return;
+        
+        BetterModel.model("demon_knight").ifPresent(renderer -> {
+            EntityTracker tracker = renderer.getOrCreate(BaseEntity.of(entity));
+            trackers.put(entity.getUniqueId(), tracker);
+            
+            // Start idle animation
+            tracker.animate("idle");
+        });
+    }
+    
+    @EventHandler
+    public void onDamage(EntityDamageEvent event) {
+        EntityTracker tracker = trackers.get(event.getEntity().getUniqueId());
+        if (tracker == null) return;
+        
+        // Play damage animation and apply red tint
+        tracker.animate("damage");
+        tracker.damageTint(); // Built-in damage tint effect
+    }
+    
+    @EventHandler
+    public void onDeath(EntityDeathEvent event) {
+        EntityTracker tracker = trackers.remove(event.getEntity().getUniqueId());
+        if (tracker == null) return;
+        
+        // Play death animation, then close after 2 seconds
+        tracker.animate("death");
+        tracker.location().taskLater(40, tracker::close);
+    }
+}
+```
+
+```kotlin Kotlin - Complete System
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.tracker.EntityTracker
+import org.bukkit.entity.LivingEntity
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.entity.*
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+class ModelSystem : Listener {
+    
+    private val trackers = ConcurrentHashMap<UUID, EntityTracker>()
+    
+    @EventHandler
+    fun onSpawn(event: EntitySpawnEvent) {
+        val entity = event.entity as? LivingEntity ?: return
+        
+        BetterModel.model("demon_knight").ifPresent { renderer ->
+            val tracker = renderer.getOrCreate(BaseEntity.of(entity))
+            trackers[entity.uniqueId] = tracker
+            
+            // Start idle animation
+            tracker.animate("idle")
+        }
+    }
+    
+    @EventHandler
+    fun onDamage(event: EntityDamageEvent) {
+        val tracker = trackers[event.entity.uniqueId] ?: return
+        
+        // Play damage animation and apply red tint
+        tracker.animate("damage")
+        tracker.damageTint() // Built-in damage tint effect
+    }
+    
+    @EventHandler
+    fun onDeath(event: EntityDeathEvent) {
+        val tracker = trackers.remove(event.entity.uniqueId) ?: return
+        
+        // Play death animation, then close after 2 seconds
+        tracker.animate("death")
+        tracker.location().taskLater(40) { tracker.close() }
+    }
+}
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Animated NPC" icon="person-walking" href="/examples/animated-npc">
+    Create interactive NPCs with custom animations
+  </Card>
+  <Card title="Custom Events" icon="bolt" href="/examples/custom-events">
+    Learn about hitbox interactions and custom events
+  </Card>
+  <Card title="Conditional Animations" icon="code-branch" href="/examples/conditional-animations">
+    Implement state-based animation systems
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/bettermodel">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

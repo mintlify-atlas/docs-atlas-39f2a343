@@ -1,0 +1,593 @@
+---
+title: Custom Events
+description: Handle hitbox interactions and create custom event systems
+icon: bolt
+---
+
+Learn how to use BetterModel's event system for hitbox interactions, custom triggers, and reactive model behavior.
+
+## Overview
+
+BetterModel provides powerful event systems for:
+- Hitbox interactions (click, attack, damage)
+- Model lifecycle events (spawn, despawn, close)
+- Animation events
+- Per-player events
+
+## Hitbox Events
+
+### Basic Hitbox Interaction
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import kr.toxicity.model.api.event.hitbox.HitBoxInteractEvent;
+import kr.toxicity.model.api.event.hitbox.HitBoxAttackEvent;
+import kr.toxicity.model.api.event.hitbox.HitBoxDamageEvent;
+import kr.toxicity.model.api.nms.HitBoxListener;
+import kr.toxicity.model.api.util.function.BonePredicate;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+
+public class HitBoxEvents {
+    
+    public void setupHitBoxEvents(EntityTracker tracker, LivingEntity entity) {
+        // Listen to all hitbox events
+        tracker.listenHitBox((bone, builder) -> builder
+            .interact(event -> handleInteract(event))
+            .attack(event -> handleAttack(event))
+            .damage(event -> handleDamage(event))
+        );
+        
+        // Create hitboxes on specific bones
+        tracker.createHitBox(
+            BaseEntity.of(entity),
+            null, // Listener applied above
+            BonePredicate.name("body").or(BonePredicate.name("head"))
+        );
+    }
+    
+    private void handleInteract(HitBoxInteractEvent event) {
+        Player player = event.player().player();
+        if (player == null) return;
+        
+        String boneName = event.bone().name().value();
+        player.sendMessage("§aYou interacted with: " + boneName);
+        
+        // Right-click interaction
+        if (event.hand() != null) {
+            player.sendMessage("§7Hand: " + event.hand().name());
+        }
+    }
+    
+    private void handleAttack(HitBoxAttackEvent event) {
+        Player player = event.player().player();
+        if (player == null) return;
+        
+        // Left-click attack
+        player.sendMessage("§cYou attacked: " + event.bone().name().value());
+        
+        // Apply custom damage logic
+        event.hitBox().source().ifPresent(entity -> {
+            if (entity instanceof LivingEntity living) {
+                living.damage(5.0, player);
+            }
+        });
+    }
+    
+    private void handleDamage(HitBoxDamageEvent event) {
+        // Handle when model takes damage
+        double damage = event.damage();
+        String boneName = event.bone().name().value();
+        
+        System.out.println("Bone " + boneName + " took " + damage + " damage");
+        
+        // Apply damage multipliers based on bone
+        if (boneName.contains("head")) {
+            event.damage(damage * 2.0); // Headshot multiplier
+        }
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.tracker.EntityTracker
+import kr.toxicity.model.api.event.hitbox.*
+import kr.toxicity.model.api.nms.HitBoxListener
+import kr.toxicity.model.api.util.function.BonePredicate
+import org.bukkit.entity.LivingEntity
+import org.bukkit.entity.Player
+
+class HitBoxEvents {
+    
+    fun setupHitBoxEvents(tracker: EntityTracker, entity: LivingEntity) {
+        tracker.listenHitBox { bone, builder ->
+            builder
+                .interact { event -> handleInteract(event) }
+                .attack { event -> handleAttack(event) }
+                .damage { event -> handleDamage(event) }
+        }
+        
+        tracker.createHitBox(
+            BaseEntity.of(entity),
+            null,
+            BonePredicate.name("body").or(BonePredicate.name("head"))
+        )
+    }
+    
+    private fun handleInteract(event: HitBoxInteractEvent) {
+        val player = event.player().player() ?: return
+        val boneName = event.bone().name().value()
+        
+        player.sendMessage("§aYou interacted with: $boneName")
+        event.hand()?.let { hand ->
+            player.sendMessage("§7Hand: ${hand.name}")
+        }
+    }
+    
+    private fun handleAttack(HitBoxAttackEvent event) {
+        val player = event.player().player() ?: return
+        
+        player.sendMessage("§cYou attacked: ${event.bone().name().value()}")
+        
+        event.hitBox().source().ifPresent { entity ->
+            if (entity is LivingEntity) {
+                entity.damage(5.0, player)
+            }
+        }
+    }
+    
+    private fun handleDamage(event: HitBoxDamageEvent) {
+        val damage = event.damage()
+        val boneName = event.bone().name().value()
+        
+        println("Bone $boneName took $damage damage")
+        
+        if (boneName.contains("head")) {
+            event.damage(damage * 2.0) // Headshot multiplier
+        }
+    }
+}
+```
+</CodeGroup>
+
+## Mount and Dismount Events
+
+### Handling Entity Mounting
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.event.MountModelEvent;
+import kr.toxicity.model.api.event.DismountModelEvent;
+import kr.toxicity.model.api.BetterModel;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+
+public class MountEvents implements Listener {
+    
+    @EventHandler
+    public void onModelMount(MountModelEvent event) {
+        EntityTracker tracker = event.tracker();
+        RenderedBone bone = event.bone();
+        BaseEntity mountedEntity = event.entity();
+        
+        // Handle mount logic
+        System.out.println("Entity mounted on " + bone.name().value());
+        
+        // Play mount animation
+        tracker.animate("mount");
+        
+        // Apply visual effects
+        tracker.update(
+            TrackerUpdateAction.glow(true),
+            BonePredicate.from(b -> b == bone)
+        );
+    }
+    
+    @EventHandler
+    public void onModelDismount(DismountModelEvent event) {
+        EntityTracker tracker = event.tracker();
+        RenderedBone bone = event.bone();
+        
+        System.out.println("Entity dismounted from " + bone.name().value());
+        
+        // Play dismount animation
+        tracker.animate("dismount");
+        
+        // Remove visual effects
+        tracker.update(
+            TrackerUpdateAction.glow(false),
+            BonePredicate.from(b -> b == bone)
+        );
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.event.MountModelEvent
+import kr.toxicity.model.api.event.DismountModelEvent
+import kr.toxicity.model.api.tracker.TrackerUpdateAction
+import kr.toxicity.model.api.util.function.BonePredicate
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+
+class MountEvents : Listener {
+    
+    @EventHandler
+    fun onModelMount(event: MountModelEvent) {
+        val tracker = event.tracker()
+        val bone = event.bone()
+        val mountedEntity = event.entity()
+        
+        println("Entity mounted on ${bone.name().value()}")
+        
+        tracker.animate("mount")
+        tracker.update(
+            TrackerUpdateAction.glow(true),
+            BonePredicate.from { it == bone }
+        )
+    }
+    
+    @EventHandler
+    fun onModelDismount(event: DismountModelEvent) {
+        val tracker = event.tracker()
+        val bone = event.bone()
+        
+        println("Entity dismounted from ${bone.name().value()}")
+        
+        tracker.animate("dismount")
+        tracker.update(
+            TrackerUpdateAction.glow(false),
+            BonePredicate.from { it == bone }
+        )
+    }
+}
+```
+</CodeGroup>
+
+## Tracker Lifecycle Events
+
+### Model Creation and Destruction
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.event.*;
+import kr.toxicity.model.api.tracker.Tracker;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+
+public class TrackerLifecycleEvents implements Listener {
+    
+    @EventHandler
+    public void onEntityTrackerCreate(CreateEntityTrackerEvent event) {
+        EntityTracker tracker = event.tracker();
+        
+        System.out.println("Entity tracker created: " + tracker.name());
+        
+        // Setup custom behavior
+        setupTrackerBehavior(tracker);
+    }
+    
+    @EventHandler
+    public void onDummyTrackerCreate(CreateDummyTrackerEvent event) {
+        DummyTracker tracker = event.tracker();
+        
+        System.out.println("Dummy tracker created: " + tracker.name());
+    }
+    
+    @EventHandler
+    public void onTrackerClose(CloseTrackerEvent event) {
+        Tracker tracker = event.tracker();
+        Tracker.CloseReason reason = event.reason();
+        
+        System.out.println("Tracker closed: " + tracker.name() + " (" + reason + ")");
+        
+        // Save data if needed
+        if (reason.shouldBeSave() && tracker instanceof EntityTracker entityTracker) {
+            if (entityTracker.canBeSaved()) {
+                saveTrackerData(entityTracker);
+            }
+        }
+    }
+    
+    private void setupTrackerBehavior(EntityTracker tracker) {
+        // Custom setup logic
+    }
+    
+    private void saveTrackerData(EntityTracker tracker) {
+        // Save tracker state
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.event.*
+import kr.toxicity.model.api.tracker.EntityTracker
+import kr.toxicity.model.api.tracker.Tracker
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+
+class TrackerLifecycleEvents : Listener {
+    
+    @EventHandler
+    fun onEntityTrackerCreate(event: CreateEntityTrackerEvent) {
+        val tracker = event.tracker()
+        println("Entity tracker created: ${tracker.name()}")
+        setupTrackerBehavior(tracker)
+    }
+    
+    @EventHandler
+    fun onDummyTrackerCreate(event: CreateDummyTrackerEvent) {
+        val tracker = event.tracker()
+        println("Dummy tracker created: ${tracker.name()}")
+    }
+    
+    @EventHandler
+    fun onTrackerClose(event: CloseTrackerEvent) {
+        val tracker = event.tracker()
+        val reason = event.reason()
+        
+        println("Tracker closed: ${tracker.name()} ($reason)")
+        
+        if (reason.shouldBeSave() && tracker is EntityTracker) {
+            if (tracker.canBeSaved()) {
+                saveTrackerData(tracker)
+            }
+        }
+    }
+    
+    private fun setupTrackerBehavior(tracker: EntityTracker) {
+        // Custom setup logic
+    }
+    
+    private fun saveTrackerData(tracker: EntityTracker) {
+        // Save tracker state
+    }
+}
+```
+</CodeGroup>
+
+## Player Visibility Events
+
+### Per-Player Animation Events
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.event.PlayerPerAnimationStartEvent;
+import kr.toxicity.model.api.event.PlayerPerAnimationEndEvent;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+
+public class PlayerAnimationEvents implements Listener {
+    
+    @EventHandler
+    public void onPerAnimationStart(PlayerPerAnimationStartEvent event) {
+        Tracker tracker = event.tracker();
+        Player player = event.player().player();
+        
+        if (player != null) {
+            player.sendMessage("§ePer-player animation started for: " + tracker.name());
+        }
+    }
+    
+    @EventHandler
+    public void onPerAnimationEnd(PlayerPerAnimationEndEvent event) {
+        Tracker tracker = event.tracker();
+        Player player = event.player().player();
+        
+        if (player != null) {
+            player.sendMessage("§7Per-player animation ended for: " + tracker.name());
+        }
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.event.PlayerPerAnimationStartEvent
+import kr.toxicity.model.api.event.PlayerPerAnimationEndEvent
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+
+class PlayerAnimationEvents : Listener {
+    
+    @EventHandler
+    fun onPerAnimationStart(event: PlayerPerAnimationStartEvent) {
+        val tracker = event.tracker()
+        val player = event.player().player()
+        
+        player?.sendMessage("§ePer-player animation started for: ${tracker.name()}")
+    }
+    
+    @EventHandler
+    fun onPerAnimationEnd(event: PlayerPerAnimationEndEvent) {
+        val tracker = event.tracker()
+        val player = event.player().player()
+        
+        player?.sendMessage("§7Per-player animation ended for: ${tracker.name()}")
+    }
+}
+```
+</CodeGroup>
+
+## Custom Event System
+
+### Creating Custom Model Events
+
+```java
+import kr.toxicity.model.api.tracker.EntityTracker;
+import org.bukkit.event.Event;
+import org.bukkit.event.HandlerList;
+
+public class CustomModelEvent extends Event {
+    
+    private static final HandlerList HANDLERS = new HandlerList();
+    
+    private final EntityTracker tracker;
+    private final String eventType;
+    private final Object data;
+    
+    public CustomModelEvent(EntityTracker tracker, String eventType, Object data) {
+        this.tracker = tracker;
+        this.eventType = eventType;
+        this.data = data;
+    }
+    
+    public EntityTracker getTracker() {
+        return tracker;
+    }
+    
+    public String getEventType() {
+        return eventType;
+    }
+    
+    public Object getData() {
+        return data;
+    }
+    
+    @Override
+    public HandlerList getHandlers() {
+        return HANDLERS;
+    }
+    
+    public static HandlerList getHandlerList() {
+        return HANDLERS;
+    }
+}
+
+// Usage
+public void triggerCustomEvent(EntityTracker tracker) {
+    CustomModelEvent event = new CustomModelEvent(
+        tracker,
+        "skill_used",
+        Map.of("skillName", "fireball", "damage", 50)
+    );
+    
+    Bukkit.getPluginManager().callEvent(event);
+}
+```
+
+## Hitbox Builder Pattern
+
+### Advanced Hitbox Configuration
+
+```java
+import kr.toxicity.model.api.nms.HitBoxListener;
+import kr.toxicity.model.api.event.hitbox.*;
+
+public class AdvancedHitBoxSetup {
+    
+    public void setupComplexHitBox(EntityTracker tracker, BaseEntity entity) {
+        HitBoxListener listener = HitBoxListener.builder()
+            // Interaction handler
+            .interact(event -> {
+                Player player = event.player().player();
+                if (player == null) return;
+                
+                if (player.isSneaking()) {
+                    // Special interaction when sneaking
+                    player.sendMessage("§6Secret interaction!");
+                } else {
+                    // Normal interaction
+                    player.sendMessage("§aNormal interaction");
+                }
+            })
+            
+            // Attack handler
+            .attack(event -> {
+                Player player = event.player().player();
+                if (player == null) return;
+                
+                // Check if player has permission
+                if (player.hasPermission("model.attack")) {
+                    player.sendMessage("§cAttack successful!");
+                } else {
+                    event.setCancelled(true);
+                    player.sendMessage("§cYou can't attack this!");
+                }
+            })
+            
+            // Damage handler
+            .damage(event -> {
+                String boneName = event.bone().name().value();
+                double damage = event.damage();
+                
+                // Apply bone-specific damage multipliers
+                double multiplier = switch (boneName) {
+                    case "head" -> 2.0;
+                    case "body" -> 1.0;
+                    case "legs" -> 0.5;
+                    default -> 1.0;
+                };
+                
+                event.damage(damage * multiplier);
+            })
+            
+            // Create handler
+            .create(hitBox -> {
+                System.out.println("HitBox created: " + hitBox.uuid());
+            })
+            
+            // Remove handler
+            .remove(hitBox -> {
+                System.out.println("HitBox removed: " + hitBox.uuid());
+            })
+            
+            // Mount handler
+            .mount((hitBox, mountedEntity) -> {
+                System.out.println("Entity mounted: " + mountedEntity.uuid());
+            })
+            
+            // Dismount handler
+            .dismount((hitBox, dismountedEntity) -> {
+                System.out.println("Entity dismounted: " + dismountedEntity.uuid());
+            })
+            
+            .build();
+        
+        // Create hitbox with listener
+        tracker.createHitBox(
+            entity,
+            listener,
+            BonePredicate.TRUE
+        );
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+  - Use HitBoxListener.builder() for complex hitbox configurations
+  - Register event listeners in your plugin's onEnable()
+  - Handle null checks for player() calls in events
+  - Use event cancellation to prevent default behavior
+  - Store event data for analytics and debugging
+</Tip>
+
+<Warning>
+  - Avoid heavy computations in event handlers
+  - Don't create infinite event loops
+  - Always unregister listeners when cleaning up
+  - Test event handlers with multiple concurrent players
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Animated NPC" icon="person-walking" href="/examples/animated-npc">
+    Use events for NPC interactions
+  </Card>
+  <Card title="Dynamic Boss" icon="dragon" href="/examples/dynamic-boss">
+    Implement boss mechanics with events
+  </Card>
+  <Card title="Multi-part Entities" icon="puzzle-piece" href="/examples/multi-part-entities">
+    Handle per-part events
+  </Card>
+  <Card title="HitBox API" icon="book" href="/api/hitbox">
+    Complete hitbox API documentation
+  </Card>
+</CardGroup>

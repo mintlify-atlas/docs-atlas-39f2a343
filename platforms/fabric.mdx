@@ -1,0 +1,447 @@
+---
+title: "Fabric"
+description: "Fabric mod implementation and platform differences"
+---
+
+## Overview
+
+BetterModel is available as a Fabric mod, bringing server-side 3D model rendering to Fabric-based servers. The Fabric implementation uses mixins and access wideners for deep integration with Minecraft's internals.
+
+<Note>
+  The Fabric port was contributed by **Kouvali** and is maintained alongside the Bukkit versions.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Server-Side" icon="server">
+    Runs on Fabric servers with no client-side requirements
+  </Card>
+  <Card title="Polymer Integration" icon="cube">
+    Uses Polymer Resource Pack for automatic resource distribution
+  </Card>
+  <Card title="Mixin-Based" icon="code">
+    Deep Minecraft integration via Fabric mixins
+  </Card>
+  <Card title="Quilt Compatible" icon="puzzle-piece">
+    Works on both Fabric Loader and Quilt
+  </Card>
+</CardGroup>
+
+## Installation
+
+<Steps>
+  <Step title="Install Fabric Loader">
+    Ensure you have Fabric Loader installed. BetterModel requires:
+    - **Minecraft**: 1.21.11
+    - **Fabric Loader**: Any version
+    - **Fabric API**: Required (see dependencies below)
+  </Step>
+  
+  <Step title="Download BetterModel">
+    Get the Fabric version from Modrinth:
+    ```
+    bettermodel-2.2.0+1.21.11-fabric.jar
+    ```
+    
+    <Info>
+      Note the version format: `VERSION+MINECRAFT_VERSION-fabric.jar`
+    </Info>
+  </Step>
+  
+  <Step title="Install Dependencies">
+    BetterModel requires these Fabric mods (auto-installed by most launchers):
+    
+    **Required Fabric API Modules**:
+    - `fabric-api-base`
+    - `fabric-command-api-v2`
+    - `fabric-data-attachment-api-v1`
+    - `fabric-entity-events-v1`
+    - `fabric-events-interaction-v0`
+    - `fabric-lifecycle-events-v1`
+    - `fabric-networking-api-v1`
+    - `fabric-transitive-access-wideners-v1`
+    
+    **Required Mod Libraries**:
+    - `adventure-platform-fabric` - Text components
+    - `cloud` - Command framework  
+    - `polymer-resource-pack` - Automatic pack distribution
+    - `fabric-language-kotlin` - Kotlin runtime
+  </Step>
+  
+  <Step title="Place in mods folder">
+    Copy the JAR and all dependencies to your server's `mods/` directory.
+  </Step>
+  
+  <Step title="Configure and start">
+    BetterModel creates its config in `config/bettermodel/`:
+    ```
+    config/
+    └── bettermodel/
+        ├── config.yml
+        ├── models/
+        └── players/
+    ```
+  </Step>
+</Steps>
+
+## Architecture Differences
+
+### Polymer Resource Pack Integration
+
+Unlike Bukkit versions, Fabric uses Polymer for automatic resource pack distribution:
+
+```kotlin Polymer Integration
+override fun onInitialize() {
+    // Register mod assets with Polymer
+    PolymerResourcePackUtils.addModAssets(modId())
+    PolymerResourcePackUtils.markAsRequired()
+    
+    // Hook into Polymer's pack creation
+    PolymerResourcePackUtils.RESOURCE_PACK_CREATION_EVENT.register { builder ->
+        reload {
+            includeAssets(builder, it.packResult)
+        }
+    }
+}
+```
+
+This automatically:
+- Injects BetterModel assets into Polymer's resource pack
+- Handles pack versioning and format detection
+- Sends the pack to connecting players
+
+### Mixin-Based Entity Management
+
+The Fabric version uses mixins for entity tracking:
+
+```java Entity Mixin
+@Mixin(Entity.class)
+public abstract class EntityMixin {
+    @Inject(
+        method = "tick",
+        at = @At("HEAD")
+    )
+    private void onTick(CallbackInfo ci) {
+        EntityHook.tick((Entity) (Object) this);
+    }
+}
+```
+
+Key mixins:
+- **EntityMixin**: Tracks entity lifecycle and ticking
+- **LivingEntityMixin**: Handles living entity events
+- **ServerLevelEntityCallbacksMixin**: Entity spawn/removal events
+- **DisplayAccessor**: Access to display entity internals
+
+### Access Wideners
+
+BetterModel uses access wideners for deeper integration:
+
+```accesswidener bettermodel.accesswidener
+accessWidener v2 named
+
+accessible class net/minecraft/world/entity/Display$ItemDisplay
+accessible method net/minecraft/world/entity/Display getData ()Lnet/minecraft/network/syncher/SynchedEntityData;
+```
+
+This allows direct access to Minecraft internals without reflection.
+
+## Fabric-Specific API
+
+### Platform Access
+
+```java Fabric Platform
+import kr.toxicity.model.api.fabric.BetterModelFabric;
+import net.minecraft.server.MinecraftServer;
+
+BetterModelFabric fabric = (BetterModelFabric) BetterModel.platform();
+
+// Access Minecraft server instance
+MinecraftServer server = fabric.server();
+
+// Use Fabric scheduler
+fabric.scheduler().asyncTask(() -> {
+    // Async work
+});
+```
+
+### Entity Adapters
+
+```java Fabric Adapters
+import kr.toxicity.model.api.fabric.platform.FabricAdapter;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+
+// Convert Minecraft entities to BetterModel platform entities
+EntityTracker tracker = BetterModel.model("demon_knight")
+    .map(renderer -> renderer.create(
+        FabricAdapter.adapt(minecraftEntity)
+    ))
+    .orElse(null);
+
+// Adapt players
+PlayerManager playerManager = BetterModel.platform().playerManager();
+FabricAdapter.adapt(minecraftPlayer).skin();
+```
+
+## Data Attachments
+
+Fabric version uses Fabric's Data Attachment API for storing model data:
+
+```kotlin Data Attachments
+object BetterModelAttachments {
+    private val ENTITY_TRACKER = AttachmentType.builder<EntityTracker>()
+        .buildAndRegister(ResourceLocation("bettermodel", "entity_tracker"))
+    
+    private val PLAYER_DISGUISE = AttachmentType.builder<PlayerDisguise>()
+        .buildAndRegister(ResourceLocation("bettermodel", "player_disguise"))
+    
+    fun init() {
+        // Attachments registered
+    }
+}
+```
+
+This replaces Bukkit's PersistentDataContainer with Fabric's native attachment system.
+
+## Gradle Integration
+
+To depend on BetterModel Fabric in your mod:
+
+```kotlin build.gradle.kts
+repositories {
+    mavenCentral()
+    maven("https://maven.blamejared.com/")  // Transitive dependency
+    maven("https://maven.nucleoid.xyz/")    // Transitive dependency
+}
+
+dependencies {
+    modApi("io.github.toxicity188:bettermodel-fabric:2.2.0+1.21.11")
+}
+```
+
+<Warning>
+  The Fabric version includes the API as part of the main JAR. Use `modApi` to depend on it, not `compileOnly`.
+</Warning>
+
+### Fabric Mod JSON
+
+Include BetterModel as a dependency:
+
+```json fabric.mod.json
+{
+  "id": "your-mod",
+  "depends": {
+    "bettermodel": "*",
+    "fabric-api-base": "*"
+  }
+}
+```
+
+## Performance Characteristics
+
+### Bundle Packet Optimization
+
+The Fabric version implements custom bundle packet handling:
+
+```java Bundle Packets
+public class BetterModelBundlePacket extends ClientboundBundlePacket {
+    @Override
+    public Iterable<Packet<? super ClientGamePacketListener>> subPackets() {
+        // Optimized packet bundling for model updates
+        return optimizedPackets;
+    }
+}
+```
+
+This reduces network overhead when updating multiple display entities.
+
+### Async Resource Generation
+
+Polymer integration allows async resource pack generation:
+
+```kotlin Async Generation
+val packResult = config().packType().toGenerator().create(zipper, pipeline)
+
+// Polymer handles serving to clients
+includeAssets(builder, packResult)
+```
+
+## Differences from Bukkit Version
+
+<AccordionGroup>
+  <Accordion title="Resource Pack Distribution" icon="file-zipper">
+    **Bukkit**: Manual distribution via server.properties or plugins
+    
+    **Fabric**: Automatic via Polymer Resource Pack API
+    
+    Polymer automatically:
+    - Merges resource packs from multiple mods
+    - Handles pack format versions and overlays
+    - Serves packs directly from server memory
+  </Accordion>
+  
+  <Accordion title="Entity Management" icon="cube">
+    **Bukkit**: Event-based with Bukkit API
+    
+    **Fabric**: Mixin-based injection into Minecraft's tick loop
+    
+    Mixins provide:
+    - Lower overhead (no event bus)
+    - Direct access to entity internals
+    - Earlier hook points in entity lifecycle
+  </Accordion>
+  
+  <Accordion title="Configuration Location" icon="folder">
+    **Bukkit**: `plugins/BetterModel/`
+    
+    **Fabric**: `config/bettermodel/`
+    
+    Follows Fabric's standard config directory convention.
+  </Accordion>
+  
+  <Accordion title="Command System" icon="terminal">
+    **Bukkit**: Bukkit command API
+    
+    **Fabric**: Fabric Command API v2
+    
+    Same Cloud command framework, different registration:
+    ```kotlin Fabric Commands
+    fun startFabricCommand() {
+        val commandManager = FabricServerCommandManager(
+            CommandExecutionCoordinator.simpleCoordinator(),
+            { AudienceCommandSource(it) },
+            { it.source }
+        )
+        registerCommands(commandManager)
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Scheduler API" icon="clock">
+    **Bukkit**: BukkitScheduler or Paper's async scheduler
+    
+    **Fabric**: Minecraft's server task queue
+    
+    ```kotlin Fabric Scheduler
+    override fun asyncTask(runnable: Runnable) = 
+        CompletableFuture.runAsync(runnable)
+            .thenApply { ModelTask.completed() }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Compatibility
+
+### Quilt Support
+
+<Info>
+  BetterModel works on Quilt Loader without modification. The mod loader is detected at runtime and both are fully supported.
+</Info>
+
+### Mod Compatibility
+
+Compatible with most Fabric mods. Known working integrations:
+- **Polymer mods**: Full compatibility via Polymer API
+- **Fabric API**: Required dependency
+- **Adventure Platform Fabric**: Used for text components
+
+### What's NOT Supported
+
+The Fabric version does not include:
+- MythicMobs integration (Bukkit only)
+- Citizens integration (Bukkit only)  
+- Bukkit plugin hooks
+
+These are platform-specific features unique to Bukkit.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Missing dependencies" icon="puzzle-piece">
+    **Error**: "Mod requires fabric-api-base"
+    
+    **Solution**: Install Fabric API. Most launchers include this, but you may need to manually download it from Modrinth.
+    
+    Required mods:
+    - Fabric API (includes all required modules)
+    - Fabric Language Kotlin
+    - Adventure Platform Fabric
+    - Cloud Command Framework
+    - Polymer Resource Pack
+  </Accordion>
+  
+  <Accordion title="Mixin conflicts" icon="code">
+    **Error**: "Mixin application failed"
+    
+    **Solution**: Check for conflicting mods that mixin into Entity, Display, or packet classes. Enable mixin debug logging:
+    ```
+    -Dmixin.debug.verbose=true
+    ```
+  </Accordion>
+  
+  <Accordion title="Resource pack not applying" icon="file-zipper">
+    **Symptom**: Models appear as regular items
+    
+    **Checks**:
+    1. Verify Polymer Resource Pack is installed
+    2. Check client received the pack (F3 + T to reload)
+    3. Look for Polymer messages in server console
+    
+    Polymer automatically marks the pack as required, so clients must accept it.
+  </Accordion>
+  
+  <Accordion title="Access widener errors" icon="lock-open">
+    **Error**: "IllegalAccessError"
+    
+    **Solution**: Ensure you have `fabric-transitive-access-wideners-v1` installed. This Fabric API module is required for access wideners to work properly.
+  </Accordion>
+</AccordionGroup>
+
+## Example: Fabric Mod Integration
+
+```java Using BetterModel in Your Fabric Mod
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.fabric.BetterModelFabric;
+import kr.toxicity.model.api.fabric.platform.FabricAdapter;
+import net.fabricmc.api.ModInitializer;
+import net.minecraft.world.entity.LivingEntity;
+
+public class YourMod implements ModInitializer {
+    @Override
+    public void onInitialize() {
+        BetterModelFabric fabric = (BetterModelFabric) BetterModel.platform();
+        
+        // Wait for server start
+        fabric.scheduler().asyncTask(() -> {
+            // Your initialization
+        });
+    }
+    
+    public void attachModel(LivingEntity entity) {
+        BetterModel.model("custom_model")
+            .map(renderer -> renderer.create(
+                FabricAdapter.adapt(entity)
+            ))
+            .ifPresent(tracker -> {
+                tracker.animate("idle", AnimationModifier.DEFAULT);
+            });
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Bukkit Platforms" icon="bucket" href="/platforms/bukkit-spigot-paper">
+    Compare with Bukkit/Spigot/Paper implementation
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/bettermodel">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Creating Models" icon="cube" href="/guides/creating-models">
+    Learn how to create BlockBench models
+  </Card>
+  <Card title="Examples" icon="book-open" href="/examples/basic-entity-model">
+    See complete usage examples
+  </Card>
+</CardGroup>

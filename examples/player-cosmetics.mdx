@@ -1,0 +1,485 @@
+---
+title: Player Cosmetics
+description: Create cosmetic items and accessories for players using custom models
+icon: shirt
+---
+
+Learn how to add cosmetic models to players, including hats, wings, pets, and other accessories.
+
+## Overview
+
+Player cosmetics allow you to:
+- Attach custom models to players
+- Create wearable accessories (hats, wings, capes)
+- Build companion pets that follow players
+- Add particle effects and animations
+- Support multiple cosmetics simultaneously
+
+## Basic Cosmetic System
+
+### Cosmetic Manager
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.profile.ModelProfile;
+import kr.toxicity.model.api.tracker.PlayerTracker;
+import kr.toxicity.model.api.tracker.TrackerModifier;
+import org.bukkit.entity.Player;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class CosmeticManager {
+    
+    private final Map<UUID, Map<CosmeticSlot, PlayerTracker>> playerCosmetics = new ConcurrentHashMap<>();
+    
+    public void equipCosmetic(Player player, CosmeticSlot slot, String modelName) {
+        // Remove existing cosmetic in slot
+        unequipCosmetic(player, slot);
+        
+        BetterModel.limb(modelName).ifPresent(renderer -> {
+            PlayerTracker tracker = (PlayerTracker) renderer.create(
+                BaseEntity.of(player),
+                ModelProfile.of(player),
+                TrackerModifier.builder()
+                    .sightTrace(false)
+                    .damageAnimation(false)
+                    .damageTint(false)
+                    .build()
+            );
+            
+            // Store tracker
+            playerCosmetics
+                .computeIfAbsent(player.getUniqueId(), k -> new ConcurrentHashMap<>())
+                .put(slot, tracker);
+            
+            // Start idle animation
+            tracker.animate("idle");
+        });
+    }
+    
+    public void unequipCosmetic(Player player, CosmeticSlot slot) {
+        Map<CosmeticSlot, PlayerTracker> cosmetics = playerCosmetics.get(player.getUniqueId());
+        if (cosmetics == null) return;
+        
+        PlayerTracker tracker = cosmetics.remove(slot);
+        if (tracker != null) {
+            tracker.close();
+        }
+    }
+    
+    public void removeAllCosmetics(Player player) {
+        Map<CosmeticSlot, PlayerTracker> cosmetics = playerCosmetics.remove(player.getUniqueId());
+        if (cosmetics != null) {
+            cosmetics.values().forEach(PlayerTracker::close);
+        }
+    }
+    
+    public Map<CosmeticSlot, PlayerTracker> getCosmetics(Player player) {
+        return playerCosmetics.getOrDefault(player.getUniqueId(), Collections.emptyMap());
+    }
+    
+    public enum CosmeticSlot {
+        HAT,
+        BACK,      // Wings, capes
+        SHOULDER,  // Parrots, pets
+        AURA,      // Particle effects
+        COMPANION  // Following pets
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.profile.ModelProfile
+import kr.toxicity.model.api.tracker.PlayerTracker
+import kr.toxicity.model.api.tracker.TrackerModifier
+import org.bukkit.entity.Player
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+
+class CosmeticManager {
+    
+    private val playerCosmetics = ConcurrentHashMap<UUID, MutableMap<CosmeticSlot, PlayerTracker>>()
+    
+    fun equipCosmetic(player: Player, slot: CosmeticSlot, modelName: String) {
+        unequipCosmetic(player, slot)
+        
+        BetterModel.limb(modelName).ifPresent { renderer ->
+            val tracker = renderer.create(
+                BaseEntity.of(player),
+                ModelProfile.of(player),
+                TrackerModifier.builder()
+                    .sightTrace(false)
+                    .damageAnimation(false)
+                    .damageTint(false)
+                    .build()
+            ) as PlayerTracker
+            
+            playerCosmetics
+                .computeIfAbsent(player.uniqueId) { ConcurrentHashMap() }
+                [slot] = tracker
+            
+            tracker.animate("idle")
+        }
+    }
+    
+    fun unequipCosmetic(player: Player, slot: CosmeticSlot) {
+        val cosmetics = playerCosmetics[player.uniqueId] ?: return
+        cosmetics.remove(slot)?.close()
+    }
+    
+    fun removeAllCosmetics(player: Player) {
+        playerCosmetics.remove(player.uniqueId)?.values?.forEach { it.close() }
+    }
+    
+    fun getCosmetics(player: Player): Map<CosmeticSlot, PlayerTracker> {
+        return playerCosmetics[player.uniqueId] ?: emptyMap()
+    }
+    
+    enum class CosmeticSlot {
+        HAT,
+        BACK,
+        SHOULDER,
+        AURA,
+        COMPANION
+    }
+}
+```
+</CodeGroup>
+
+## Animated Wings
+
+### Wings with Movement Animation
+
+```java
+import kr.toxicity.model.api.animation.AnimationModifier;
+import org.bukkit.entity.Player;
+
+public class AnimatedWings {
+    
+    public void equipWings(Player player, CosmeticManager manager) {
+        manager.equipCosmetic(player, CosmeticManager.CosmeticSlot.BACK, "angel_wings");
+        
+        PlayerTracker tracker = manager.getCosmetics(player)
+            .get(CosmeticManager.CosmeticSlot.BACK);
+        
+        if (tracker != null) {
+            setupWingAnimations(tracker, player);
+        }
+    }
+    
+    private void setupWingAnimations(PlayerTracker tracker, Player player) {
+        // Idle wings
+        tracker.animate("wings_idle");
+        
+        // Flap when flying
+        tracker.tick(5, (t, bundler) -> {
+            if (player.isGliding()) {
+                t.stopAnimation("wings_idle");
+                t.animate("wings_flap", AnimationModifier.builder()
+                    .speed(1.5F)
+                    .build()
+                );
+            } else if (!t.renderer().animations().containsKey("wings_idle")) {
+                t.stopAnimation("wings_flap");
+                t.animate("wings_idle");
+            }
+        });
+    }
+}
+```
+
+## Companion Pets
+
+### Pet That Follows Player
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.tracker.DummyTracker;
+import kr.toxicity.model.api.tracker.ModelRotation;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
+
+public class CompanionPet {
+    
+    private final DummyTracker tracker;
+    private final Player owner;
+    private Location targetLocation;
+    
+    public CompanionPet(Player owner, String modelName) {
+        this.owner = owner;
+        this.targetLocation = owner.getLocation();
+        
+        this.tracker = BetterModel.model(modelName)
+            .map(renderer -> renderer.create(owner.getLocation()))
+            .orElse(null);
+        
+        if (tracker != null) {
+            setupPetBehavior();
+        }
+    }
+    
+    private void setupPetBehavior() {
+        // Start idle animation
+        tracker.animate("pet_idle");
+        
+        // Follow player
+        tracker.tick(2, (t, bundler) -> {
+            Location ownerLoc = owner.getLocation();
+            Location currentLoc = tracker.location().toBukkit();
+            
+            // Calculate offset behind player
+            Vector direction = ownerLoc.getDirection().multiply(-1).normalize();
+            targetLocation = ownerLoc.clone()
+                .add(direction.multiply(2))
+                .add(0, 0.5, 0);
+            
+            double distance = currentLoc.distance(targetLocation);
+            
+            // Move if too far
+            if (distance > 0.5) {
+                // Calculate movement
+                Vector movement = targetLocation.toVector()
+                    .subtract(currentLoc.toVector())
+                    .normalize()
+                    .multiply(Math.min(distance * 0.3, 0.5));
+                
+                Location newLoc = currentLoc.add(movement);
+                
+                // Update rotation to face movement direction
+                float yaw = (float) Math.toDegrees(
+                    Math.atan2(-movement.getX(), movement.getZ())
+                );
+                
+                tracker.rotation(() -> new ModelRotation(0, yaw));
+                tracker.location(newLoc);
+                
+                // Play walk animation if moving fast
+                if (distance > 2) {
+                    tracker.stopAnimation("pet_idle");
+                    tracker.animate("pet_walk");
+                }
+            } else {
+                // Play idle when close
+                tracker.stopAnimation("pet_walk");
+                tracker.animate("pet_idle");
+            }
+        });
+    }
+    
+    public void remove() {
+        if (tracker != null) {
+            tracker.close();
+        }
+    }
+    
+    public DummyTracker getTracker() {
+        return tracker;
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.tracker.DummyTracker
+import kr.toxicity.model.api.tracker.ModelRotation
+import org.bukkit.Location
+import org.bukkit.entity.Player
+import kotlin.math.atan2
+import kotlin.math.min
+
+class CompanionPet(
+    private val owner: Player,
+    modelName: String
+) {
+    val tracker: DummyTracker?
+    private var targetLocation: Location = owner.location
+    
+    init {
+        tracker = BetterModel.model(modelName)
+            .map { it.create(owner.location) }
+            .orElse(null)
+        
+        tracker?.let { setupPetBehavior() }
+    }
+    
+    private fun setupPetBehavior() {
+        tracker ?: return
+        
+        tracker.animate("pet_idle")
+        
+        tracker.tick(2) { t, _ ->
+            val ownerLoc = owner.location
+            val currentLoc = tracker.location().toBukkit()
+            
+            val direction = ownerLoc.direction.multiply(-1).normalize()
+            targetLocation = ownerLoc.clone()
+                .add(direction.multiply(2))
+                .add(0.0, 0.5, 0.0)
+            
+            val distance = currentLoc.distance(targetLocation)
+            
+            if (distance > 0.5) {
+                val movement = targetLocation.toVector()
+                    .subtract(currentLoc.toVector())
+                    .normalize()
+                    .multiply(min(distance * 0.3, 0.5))
+                
+                val newLoc = currentLoc.add(movement)
+                
+                val yaw = Math.toDegrees(
+                    atan2(-movement.x, movement.z)
+                ).toFloat()
+                
+                tracker.rotation { ModelRotation(0F, yaw) }
+                tracker.location(newLoc)
+                
+                if (distance > 2) {
+                    tracker.stopAnimation("pet_idle")
+                    tracker.animate("pet_walk")
+                }
+            } else {
+                tracker.stopAnimation("pet_walk")
+                tracker.animate("pet_idle")
+            }
+        }
+    }
+    
+    fun remove() {
+        tracker?.close()
+    }
+}
+```
+</CodeGroup>
+
+## Cosmetic Menu System
+
+### GUI for Equipping Cosmetics
+
+```java
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+
+import java.util.Arrays;
+
+public class CosmeticMenu {
+    
+    private final CosmeticManager manager;
+    
+    public CosmeticMenu(CosmeticManager manager) {
+        this.manager = manager;
+    }
+    
+    public void openMenu(Player player) {
+        Inventory inv = Bukkit.createInventory(null, 27, "§6Cosmetics");
+        
+        // Hat slot
+        inv.setItem(10, createCosmeticItem(
+            Material.GOLDEN_HELMET,
+            "§6Crown",
+            "golden_crown",
+            CosmeticManager.CosmeticSlot.HAT
+        ));
+        
+        // Wings slot
+        inv.setItem(12, createCosmeticItem(
+            Material.ELYTRA,
+            "§fAngel Wings",
+            "angel_wings",
+            CosmeticManager.CosmeticSlot.BACK
+        ));
+        
+        // Pet slot
+        inv.setItem(14, createCosmeticItem(
+            Material.BONE,
+            "§7Ghost Pet",
+            "ghost_pet",
+            CosmeticManager.CosmeticSlot.COMPANION
+        ));
+        
+        player.openInventory(inv);
+    }
+    
+    private ItemStack createCosmeticItem(Material material, String name, 
+                                         String modelName, CosmeticManager.CosmeticSlot slot) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        
+        meta.setDisplayName(name);
+        meta.setLore(Arrays.asList(
+            "§7Click to equip",
+            "§8Model: " + modelName
+        ));
+        
+        item.setItemMeta(meta);
+        return item;
+    }
+    
+    public void handleClick(Player player, ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return;
+        
+        ItemMeta meta = item.getItemMeta();
+        if (meta.getLore() == null || meta.getLore().size() < 2) return;
+        
+        String modelLine = meta.getLore().get(1);
+        String modelName = modelLine.replace("§8Model: ", "");
+        
+        // Determine slot based on item type
+        CosmeticManager.CosmeticSlot slot = switch (item.getType()) {
+            case GOLDEN_HELMET -> CosmeticManager.CosmeticSlot.HAT;
+            case ELYTRA -> CosmeticManager.CosmeticSlot.BACK;
+            case BONE -> CosmeticManager.CosmeticSlot.COMPANION;
+            default -> null;
+        };
+        
+        if (slot != null) {
+            manager.equipCosmetic(player, slot, modelName);
+            player.sendMessage("§aEquipped: " + meta.getDisplayName());
+        }
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+  - Use player models (limbs) for cosmetics attached to players
+  - Disable damage animations and tints for cosmetic trackers
+  - Use DummyTracker for companion pets that move independently
+  - Cache cosmetic trackers for easy management
+  - Update cosmetic animations based on player state
+</Tip>
+
+<Warning>
+  - Always remove cosmetics when players disconnect
+  - Limit the number of simultaneous cosmetics per player
+  - Test cosmetic compatibility with player skins
+  - Validate model existence before equipping
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Armor" icon="shield" href="/examples/custom-armor-model">
+    Learn about custom armor models
+  </Card>
+  <Card title="Conditional Animations" icon="code-branch" href="/examples/conditional-animations">
+    State-based animation systems
+  </Card>
+  <Card title="Performance Optimization" icon="gauge-high" href="/examples/performance-optimization">
+    Optimize cosmetic rendering
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/tracker">
+    Tracker API documentation
+  </Card>
+</CardGroup>

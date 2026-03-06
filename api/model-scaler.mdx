@@ -1,0 +1,307 @@
+---
+title: ModelScaler
+description: Defines how a model's scale is calculated
+---
+
+## Overview
+
+The `ModelScaler` interface defines how a model's scale is calculated. Scalers can be constant values, derived from entity attributes, or composites of multiple scalers. They are serializable to JSON for configuration purposes.
+
+## Interface Definition
+
+```java
+public sealed interface ModelScaler
+```
+
+## Core Methods
+
+### name()
+
+Returns the name of this scaler type.
+
+```java
+@NotNull String name()
+```
+
+**Returns:** The scaler type name (e.g., "default", "entity", "value", "composite")
+
+### scale()
+
+Calculates the scale for a given tracker.
+
+```java
+float scale(@NotNull Tracker tracker)
+```
+
+**Parameters:**
+- `tracker` - The tracker instance to calculate scale for
+
+**Returns:** The calculated scale factor
+
+### data()
+
+Returns the configuration data for this scaler as a JSON element.
+
+```java
+@Nullable JsonElement data()
+```
+
+**Returns:** The configuration data, or null if none
+
+## Static Factory Methods
+
+### defaultScaler()
+
+Returns the default scaler (constant 1.0).
+
+```java
+static @NotNull ModelScaler defaultScaler()
+```
+
+**Returns:** A scaler that always returns 1.0
+
+**Example:**
+```java
+ModelScaler scaler = ModelScaler.defaultScaler();
+float scale = scaler.scale(tracker); // Always 1.0
+```
+
+### entity()
+
+Returns a scaler that uses the entity's scale attribute.
+
+```java
+static @NotNull ModelScaler entity()
+```
+
+**Returns:** A scaler based on entity scale
+
+**Example:**
+```java
+ModelScaler scaler = ModelScaler.entity();
+float scale = scaler.scale(tracker); // Returns entity's scale attribute
+```
+
+### value()
+
+Returns a constant value scaler.
+
+```java
+static @NotNull ModelScaler value(float value)
+```
+
+**Parameters:**
+- `value` - The constant scale value
+
+**Returns:** A scaler that always returns the specified value
+
+**Example:**
+```java
+ModelScaler scaler = ModelScaler.value(2.0f);
+float scale = scaler.scale(tracker); // Always 2.0
+```
+
+### composite()
+
+Creates a composite scaler that multiplies the results of multiple scalers.
+
+```java
+static @NotNull ModelScaler composite(@NotNull ModelScaler... scalers)
+```
+
+**Parameters:**
+- `scalers` - The scalers to combine
+
+**Returns:** A composite scaler that multiplies all child scaler results
+
+**Example:**
+```java
+ModelScaler base = ModelScaler.value(2.0f);
+ModelScaler entity = ModelScaler.entity();
+ModelScaler combined = ModelScaler.composite(base, entity);
+// Result: 2.0 * entity.scale
+```
+
+### deserialize()
+
+Deserializes a scaler from a JSON object.
+
+```java
+static @NotNull ModelScaler deserialize(@NotNull JsonObject element)
+```
+
+**Parameters:**
+- `element` - The JSON object containing scaler configuration
+
+**Returns:** The deserialized scaler, or the default scaler if invalid
+
+**Example:**
+```java
+JsonObject json = new JsonObject();
+json.addProperty("name", "value");
+json.addProperty("data", 1.5);
+ModelScaler scaler = ModelScaler.deserialize(json);
+```
+
+## Instance Methods
+
+### multiply()
+
+Multiplies this scaler by a constant value.
+
+```java
+default @NotNull ModelScaler multiply(float value)
+```
+
+**Parameters:**
+- `value` - The multiplier
+
+**Returns:** A new composite scaler
+
+**Example:**
+```java
+ModelScaler entity = ModelScaler.entity();
+ModelScaler doubled = entity.multiply(2.0f);
+// Result: entity.scale * 2.0
+```
+
+### composite()
+
+Multiplies this scaler by another scaler.
+
+```java
+default @NotNull ModelScaler composite(@NotNull ModelScaler scaler)
+```
+
+**Parameters:**
+- `scaler` - The other scaler to multiply with
+
+**Returns:** A new composite scaler
+
+**Example:**
+```java
+ModelScaler base = ModelScaler.value(1.5f);
+ModelScaler entity = ModelScaler.entity();
+ModelScaler combined = base.composite(entity);
+// Result: 1.5 * entity.scale
+```
+
+### serialize()
+
+Serializes this scaler to a JSON object.
+
+```java
+default @NotNull JsonObject serialize()
+```
+
+**Returns:** The JSON representation of this scaler
+
+**Example:**
+```java
+ModelScaler scaler = ModelScaler.value(2.0f);
+JsonObject json = scaler.serialize();
+// {"name": "value", "data": 2.0}
+```
+
+## Nested Interfaces
+
+### Getter
+
+Functional interface for calculating scale values.
+
+```java
+interface Getter {
+    float get(@NotNull Tracker tracker);
+    
+    static @NotNull Getter value(float value);
+}
+```
+
+**Constants:**
+- `DEFAULT` - Returns 1.0
+- `ENTITY` - Returns entity scale attribute
+
+### Builder
+
+Builder interface for creating Getters from JSON.
+
+```java
+interface Builder {
+    @Nullable Getter build(@NotNull JsonElement data);
+}
+```
+
+## Usage Example
+
+```java
+import kr.toxicity.model.api.tracker.ModelScaler;
+import kr.toxicity.model.api.tracker.Tracker;
+
+// Create a constant scaler
+ModelScaler constant = ModelScaler.value(1.5f);
+
+// Create an entity-based scaler
+ModelScaler entityScaler = ModelScaler.entity();
+
+// Combine multiple scalers
+ModelScaler combined = ModelScaler.composite(
+    ModelScaler.value(2.0f),
+    ModelScaler.entity()
+);
+
+// Or use the fluent API
+ModelScaler fluent = ModelScaler.entity()
+    .multiply(1.5f)
+    .composite(ModelScaler.value(0.8f));
+
+// Calculate scale for a tracker
+float scale = combined.scale(tracker);
+
+// Serialize to JSON
+JsonObject json = combined.serialize();
+
+// Deserialize from JSON
+ModelScaler loaded = ModelScaler.deserialize(json);
+```
+
+## JSON Format
+
+Scalers are serialized using the following JSON format:
+
+```json
+{
+  "name": "value",
+  "data": 2.0
+}
+```
+
+For composite scalers:
+
+```json
+{
+  "name": "composite",
+  "data": [
+    {"name": "entity"},
+    {"name": "value", "data": 1.5}
+  ]
+}
+```
+
+## Extending ModelScaler
+
+You can register custom scaler types using the `Deserializer`:
+
+```java
+ModelScaler.DESERIALIZER.addScaler("custom", data -> {
+    // Custom logic to build a Getter from JSON data
+    return tracker -> {
+        // Custom scale calculation
+        return 1.0f;
+    };
+});
+```
+
+## See Also
+
+- [ModelRotation](/api/model-rotation) - For rotating models
+- [Tracker](/api/tracker) - For tracking model state

@@ -1,0 +1,519 @@
+---
+title: Animated NPC
+description: Create interactive NPCs with custom models and animations
+icon: person-walking
+---
+
+Learn how to create fully animated NPCs using BetterModel with custom interactions and behavior.
+
+## Overview
+
+This example demonstrates creating an NPC system with:
+- Custom 3D model rendering
+- State-based animations (idle, talking, waving)
+- Click interactions using hitboxes
+- Player-specific visibility
+
+## Implementation
+
+### NPC Manager Class
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.animation.AnimationModifier;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.tracker.DummyTracker;
+import kr.toxicity.model.api.tracker.TrackerModifier;
+import kr.toxicity.model.api.event.hitbox.HitBoxInteractEvent;
+import kr.toxicity.model.api.nms.HitBoxListener;
+import kr.toxicity.model.api.util.function.BonePredicate;
+import org.bukkit.Location;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Player;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class NPCManager {
+    
+    private final Map<String, AnimatedNPC> npcs = new ConcurrentHashMap<>();
+    
+    public AnimatedNPC createNPC(String id, Location location, String modelName) {
+        // Create armor stand as base entity
+        ArmorStand stand = location.getWorld().spawn(location, ArmorStand.class, as -> {
+            as.setVisible(false);
+            as.setGravity(false);
+            as.setInvulnerable(true);
+            as.setMarker(true);
+        });
+        
+        return BetterModel.model(modelName).map(renderer -> {
+            // Create dummy tracker at location
+            DummyTracker tracker = renderer.create(
+                location,
+                TrackerModifier.builder()
+                    .sightTrace(false) // NPCs always visible
+                    .damageAnimation(false)
+                    .damageTint(false)
+                    .build()
+            );
+            
+            AnimatedNPC npc = new AnimatedNPC(id, tracker, stand);
+            npcs.put(id, npc);
+            
+            // Setup hitbox interaction
+            npc.setupInteraction();
+            
+            // Start idle animation
+            tracker.animate("idle");
+            
+            return npc;
+        }).orElse(null);
+    }
+    
+    public Optional<AnimatedNPC> getNPC(String id) {
+        return Optional.ofNullable(npcs.get(id));
+    }
+    
+    public void removeNPC(String id) {
+        AnimatedNPC npc = npcs.remove(id);
+        if (npc != null) {
+            npc.remove();
+        }
+    }
+    
+    public static class AnimatedNPC {
+        private final String id;
+        private final DummyTracker tracker;
+        private final ArmorStand baseEntity;
+        private NPCState state = NPCState.IDLE;
+        private final Set<UUID> interactingPlayers = ConcurrentHashMap.newKeySet();
+        
+        public AnimatedNPC(String id, DummyTracker tracker, ArmorStand baseEntity) {
+            this.id = id;
+            this.tracker = tracker;
+            this.baseEntity = baseEntity;
+        }
+        
+        public void setupInteraction() {
+            // Create hitbox for the entire model
+            tracker.createHitBox(
+                BaseEntity.of(baseEntity),
+                HitBoxListener.builder()
+                    .interact(event -> handleInteract(event))
+                    .build(),
+                BonePredicate.TRUE
+            );
+        }
+        
+        private void handleInteract(HitBoxInteractEvent event) {
+            Player player = event.player().player();
+            if (player == null) return;
+            
+            // Prevent spam clicking
+            if (interactingPlayers.contains(player.getUniqueId())) return;
+            interactingPlayers.add(player.getUniqueId());
+            
+            // Play greeting animation
+            setState(NPCState.TALKING);
+            tracker.animate("wave", AnimationModifier.builder()
+                .type(AnimationIterator.Type.PLAY_ONCE)
+                .build(),
+                () -> {
+                    // Return to idle after animation
+                    setState(NPCState.IDLE);
+                    tracker.animate("idle");
+                    interactingPlayers.remove(player.getUniqueId());
+                }
+            );
+            
+            // Send message to player
+            player.sendMessage("§aHello, " + player.getName() + "!");
+        }
+        
+        public void setState(NPCState newState) {
+            if (this.state == newState) return;
+            
+            this.state = newState;
+            
+            // Play state animation
+            switch (newState) {
+                case IDLE -> tracker.animate("idle");
+                case TALKING -> tracker.animate("talking");
+                case WAVING -> tracker.animate("wave");
+            }
+        }
+        
+        public void showTo(Player player) {
+            tracker.spawn(player);
+        }
+        
+        public void hideFrom(Player player) {
+            tracker.hide(player);
+        }
+        
+        public void remove() {
+            tracker.close();
+            baseEntity.remove();
+        }
+        
+        public Location getLocation() {
+            return tracker.location().toBukkit();
+        }
+        
+        public String getId() {
+            return id;
+        }
+    }
+    
+    public enum NPCState {
+        IDLE,
+        TALKING,
+        WAVING
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.animation.AnimationModifier
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.tracker.DummyTracker
+import kr.toxicity.model.api.tracker.TrackerModifier
+import kr.toxicity.model.api.event.hitbox.HitBoxInteractEvent
+import kr.toxicity.model.api.nms.HitBoxListener
+import kr.toxicity.model.api.util.function.BonePredicate
+import org.bukkit.Location
+import org.bukkit.entity.ArmorStand
+import org.bukkit.entity.Player
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+
+class NPCManager {
+    
+    private val npcs = ConcurrentHashMap<String, AnimatedNPC>()
+    
+    fun createNPC(id: String, location: Location, modelName: String): AnimatedNPC? {
+        // Create armor stand as base entity
+        val stand = location.world.spawn(location, ArmorStand::class.java) { as ->
+            as.isVisible = false
+            as.setGravity(false)
+            as.isInvulnerable = true
+            as.isMarker = true
+        }
+        
+        return BetterModel.model(modelName).map { renderer ->
+            // Create dummy tracker at location
+            val tracker = renderer.create(
+                location,
+                TrackerModifier.builder()
+                    .sightTrace(false)
+                    .damageAnimation(false)
+                    .damageTint(false)
+                    .build()
+            )
+            
+            val npc = AnimatedNPC(id, tracker, stand)
+            npcs[id] = npc
+            
+            // Setup hitbox interaction
+            npc.setupInteraction()
+            
+            // Start idle animation
+            tracker.animate("idle")
+            
+            npc
+        }.orElse(null)
+    }
+    
+    fun getNPC(id: String): AnimatedNPC? = npcs[id]
+    
+    fun removeNPC(id: String) {
+        npcs.remove(id)?.remove()
+    }
+    
+    class AnimatedNPC(
+        val id: String,
+        private val tracker: DummyTracker,
+        private val baseEntity: ArmorStand
+    ) {
+        private var state = NPCState.IDLE
+        private val interactingPlayers = ConcurrentHashMap.newKeySet<UUID>()
+        
+        fun setupInteraction() {
+            tracker.createHitBox(
+                BaseEntity.of(baseEntity),
+                HitBoxListener.builder()
+                    .interact { event -> handleInteract(event) }
+                    .build(),
+                BonePredicate.TRUE
+            )
+        }
+        
+        private fun handleInteract(event: HitBoxInteractEvent) {
+            val player = event.player().player() ?: return
+            
+            if (!interactingPlayers.add(player.uniqueId)) return
+            
+            setState(NPCState.TALKING)
+            tracker.animate(
+                "wave",
+                AnimationModifier.builder()
+                    .type(AnimationIterator.Type.PLAY_ONCE)
+                    .build()
+            ) {
+                setState(NPCState.IDLE)
+                tracker.animate("idle")
+                interactingPlayers.remove(player.uniqueId)
+            }
+            
+            player.sendMessage("§aHello, ${player.name}!")
+        }
+        
+        fun setState(newState: NPCState) {
+            if (state == newState) return
+            state = newState
+            
+            when (newState) {
+                NPCState.IDLE -> tracker.animate("idle")
+                NPCState.TALKING -> tracker.animate("talking")
+                NPCState.WAVING -> tracker.animate("wave")
+            }
+        }
+        
+        fun showTo(player: Player) = tracker.spawn(player)
+        fun hideFrom(player: Player) = tracker.hide(player)
+        
+        fun remove() {
+            tracker.close()
+            baseEntity.remove()
+        }
+        
+        fun getLocation(): Location = tracker.location().toBukkit()
+    }
+    
+    enum class NPCState {
+        IDLE, TALKING, WAVING
+    }
+}
+```
+</CodeGroup>
+
+## Usage Example
+
+### Creating NPCs
+
+<CodeGroup>
+```java Java
+import org.bukkit.Location;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+
+public class NPCCommand implements CommandExecutor {
+    private final NPCManager npcManager;
+    
+    public NPCCommand(NPCManager npcManager) {
+        this.npcManager = npcManager;
+    }
+    
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player player)) return false;
+        
+        if (args.length < 2) {
+            player.sendMessage("§cUsage: /npc <create|remove> <id> [model]");
+            return true;
+        }
+        
+        String action = args[0];
+        String id = args[1];
+        
+        switch (action.toLowerCase()) {
+            case "create" -> {
+                if (args.length < 3) {
+                    player.sendMessage("§cUsage: /npc create <id> <model>");
+                    return true;
+                }
+                
+                String modelName = args[2];
+                Location location = player.getLocation();
+                
+                NPCManager.AnimatedNPC npc = npcManager.createNPC(id, location, modelName);
+                if (npc != null) {
+                    player.sendMessage("§aNPC created: " + id);
+                } else {
+                    player.sendMessage("§cFailed to create NPC. Model not found: " + modelName);
+                }
+            }
+            
+            case "remove" -> {
+                npcManager.removeNPC(id);
+                player.sendMessage("§aNPC removed: " + id);
+            }
+            
+            default -> player.sendMessage("§cUnknown action: " + action);
+        }
+        
+        return true;
+    }
+}
+```
+
+```kotlin Kotlin
+import org.bukkit.command.Command
+import org.bukkit.command.CommandExecutor
+import org.bukkit.command.CommandSender
+import org.bukkit.entity.Player
+
+class NPCCommand(private val npcManager: NPCManager) : CommandExecutor {
+    
+    override fun onCommand(
+        sender: CommandSender,
+        command: Command,
+        label: String,
+        args: Array<String>
+    ): Boolean {
+        val player = sender as? Player ?: return false
+        
+        if (args.size < 2) {
+            player.sendMessage("§cUsage: /npc <create|remove> <id> [model]")
+            return true
+        }
+        
+        val action = args[0]
+        val id = args[1]
+        
+        when (action.lowercase()) {
+            "create" -> {
+                if (args.size < 3) {
+                    player.sendMessage("§cUsage: /npc create <id> <model>")
+                    return true
+                }
+                
+                val modelName = args[2]
+                val location = player.location
+                
+                val npc = npcManager.createNPC(id, location, modelName)
+                if (npc != null) {
+                    player.sendMessage("§aNPC created: $id")
+                } else {
+                    player.sendMessage("§cFailed to create NPC. Model not found: $modelName")
+                }
+            }
+            
+            "remove" -> {
+                npcManager.removeNPC(id)
+                player.sendMessage("§aNPC removed: $id")
+            }
+            
+            else -> player.sendMessage("§cUnknown action: $action")
+        }
+        
+        return true
+    }
+}
+```
+</CodeGroup>
+
+## Advanced Features
+
+### Scheduled Animations
+
+```java
+public void setupScheduledBehavior(AnimatedNPC npc) {
+    // Wave every 30 seconds
+    tracker.schedule(20 * 30, (t, bundler) -> {
+        if (npc.getState() == NPCState.IDLE) {
+            npc.setState(NPCState.WAVING);
+            
+            // Return to idle after 2 seconds
+            tracker.location().taskLater(40, () -> {
+                npc.setState(NPCState.IDLE);
+            });
+        }
+    });
+}
+```
+
+### Look at Player
+
+```java
+import kr.toxicity.model.api.tracker.ModelRotation;
+import org.bukkit.util.Vector;
+
+public void makeNPCLookAtPlayer(AnimatedNPC npc, Player player) {
+    Location npcLoc = npc.getLocation();
+    Location playerLoc = player.getLocation();
+    
+    // Calculate direction to player
+    Vector direction = playerLoc.toVector().subtract(npcLoc.toVector()).normalize();
+    
+    // Calculate yaw
+    float yaw = (float) Math.toDegrees(Math.atan2(-direction.getX(), direction.getZ()));
+    
+    // Update rotation
+    npc.tracker.rotation(() -> new ModelRotation(0, yaw));
+}
+```
+
+### Per-Player Interactions
+
+```java
+public class QuestNPC extends AnimatedNPC {
+    private final Map<UUID, QuestProgress> playerQuests = new HashMap<>();
+    
+    @Override
+    protected void handleInteract(HitBoxInteractEvent event) {
+        Player player = event.player().player();
+        if (player == null) return;
+        
+        QuestProgress progress = playerQuests.get(player.getUniqueId());
+        
+        if (progress == null) {
+            // First time interaction - offer quest
+            startQuest(player);
+        } else if (progress.isComplete()) {
+            // Quest complete - give reward
+            giveReward(player);
+        } else {
+            // Quest in progress - show status
+            showQuestStatus(player, progress);
+        }
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+  - Use `DummyTracker` for stationary NPCs - they're more efficient than entity-based trackers
+  - Always create a base entity (like ArmorStand) for hitbox interactions
+  - Cache player interaction states to prevent spam clicking
+  - Use `PLAY_ONCE` animation type for gesture animations
+</Tip>
+
+<Warning>
+  - Remember to remove NPCs when your plugin disables
+  - Store NPC data persistently if you want them to survive restarts
+  - Limit the number of active NPCs in a single area for performance
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Events" icon="bolt" href="/examples/custom-events">
+    Learn more about hitbox events and custom interactions
+  </Card>
+  <Card title="Conditional Animations" icon="code-branch" href="/examples/conditional-animations">
+    Create complex animation state machines
+  </Card>
+  <Card title="Player Cosmetics" icon="shirt" href="/examples/player-cosmetics">
+    Apply models to players as cosmetic items
+  </Card>
+  <Card title="Multi-part Entities" icon="puzzle-piece" href="/examples/multi-part-entities">
+    Build entities with multiple synchronized models
+  </Card>
+</CardGroup>

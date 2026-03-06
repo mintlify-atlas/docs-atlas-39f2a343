@@ -1,0 +1,524 @@
+---
+title: Custom Hitboxes
+description: Create interactive hitboxes for model bones with click detection
+icon: hand-pointer
+---
+
+## Overview
+
+Hitboxes in BetterModel allow you to create interactive regions on your model that respond to player clicks, attacks, and entity mounting. They're implemented using invisible entities synchronized with bone positions.
+
+## Understanding Hitboxes
+
+### What are Hitboxes?
+
+Hitboxes are invisible collision boxes attached to model bones that:
+
+- Detect player interactions (right-click, left-click, attack)
+- Support entity mounting and vehicles
+- Follow bone transformations (position, rotation, animation)
+- Can be created automatically or manually
+
+### Hitbox Types
+
+BetterModel uses different entity types for hitboxes:
+
+- **Interaction entities** (1.19.4+): Precise click detection
+- **Slimes**: Compatibility for older versions
+
+## Automatic Hitbox Creation
+
+### Using Bone Tags
+
+Tag bones in BlockBench with `hitbox` to auto-create hitboxes:
+
+```
+model_root
+├── head [tag: hitbox]
+├── body [tag: hitbox]
+└── mount_point [tag: hitbox]
+```
+
+Hitboxes are created automatically when the tracker spawns.
+
+### Using Bone Names
+
+Name a bone `hitbox` to auto-create:
+
+```
+model_root
+└── hitbox  # Auto-creates hitbox
+```
+
+## Manual Hitbox Creation
+
+### Creating a Single Hitbox
+
+Create hitboxes programmatically using bone predicates:
+
+```java
+import kr.toxicity.model.api.tracker.EntityTracker;
+import kr.toxicity.model.api.util.function.BonePredicate;
+import kr.toxicity.model.api.nms.HitBoxListener;
+
+EntityTracker tracker = // your tracker
+
+// Create hitbox on bones named "head"
+boolean created = tracker.createHitBox(
+    null,  // HitBoxListener (null for default)
+    BonePredicate.name("head")
+);
+
+if (created) {
+    System.out.println("Hitbox created");
+}
+```
+
+### Creating with Custom Listener
+
+Add custom interaction handling:
+
+```java
+import kr.toxicity.model.api.nms.HitBoxListener;
+
+HitBoxListener listener = HitBoxListener.builder()
+    .interact(event -> {
+        System.out.println("Player interacted: " + event.player().name());
+        System.out.println("Hand: " + event.hand());
+    })
+    .interactAt(event -> {
+        System.out.println("Interaction position: " + event.position());
+    })
+    .attack(event -> {
+        System.out.println("Hitbox attacked by: " + event.player().name());
+    })
+    .build();
+
+tracker.createHitBox(
+    listener,
+    BonePredicate.name("body")
+);
+```
+
+## Hitbox Events
+
+### Available Events
+
+```java
+import kr.toxicity.model.api.event.hitbox.*;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+
+public class HitBoxEventListener implements Listener {
+    
+    @EventHandler
+    public void onHitBoxCreate(HitBoxCreateEvent event) {
+        System.out.println("Hitbox created: " + event.bone().name());
+    }
+    
+    @EventHandler
+    public void onHitBoxRemove(HitBoxRemoveEvent event) {
+        System.out.println("Hitbox removed");
+    }
+    
+    @EventHandler
+    public void onHitBoxInteract(HitBoxInteractEvent event) {
+        System.out.println("Player: " + event.player().name());
+        System.out.println("Hand: " + event.hand());
+        
+        // Cancel the event to prevent default behavior
+        event.cancelled(true);
+    }
+    
+    @EventHandler
+    public void onHitBoxInteractAt(HitBoxInteractAtEvent event) {
+        System.out.println("Interaction position: " + event.position());
+    }
+    
+    @EventHandler
+    public void onHitBoxAttack(HitBoxAttackEvent event) {
+        System.out.println("Attacker: " + event.player().name());
+    }
+    
+    @EventHandler
+    public void onHitBoxMount(HitBoxMountEvent event) {
+        System.out.println("Entity mounted: " + event.entity().uuid());
+    }
+    
+    @EventHandler
+    public void onHitBoxDismount(HitBoxDismountEvent event) {
+        System.out.println("Entity dismounted");
+    }
+}
+```
+
+### Tracker-Level Event Listening
+
+Register event listeners directly on a tracker:
+
+```java
+import kr.toxicity.model.api.event.hitbox.HitBoxInteractEvent;
+
+tracker.listenHitBox(HitBoxInteractEvent.class, event -> {
+    System.out.println("Hitbox clicked!");
+    event.player().sendMessage("You clicked the model!");
+});
+
+// Or using builder pattern
+tracker.listenHitBox((bone, builder) -> builder
+    .interact(event -> {
+        System.out.println("Interacted with: " + bone.name());
+    })
+    .attack(event -> {
+        System.out.println("Attacked: " + bone.name());
+    })
+);
+```
+
+## Working with Hitboxes
+
+### Retrieving Hitboxes
+
+Get a hitbox from a bone:
+
+```java
+import kr.toxicity.model.api.bone.RenderedBone;
+import kr.toxicity.model.api.nms.HitBox;
+
+// Get specific bone's hitbox
+RenderedBone bone = tracker.bone("head");
+if (bone != null) {
+    HitBox hitBox = bone.getHitBox();
+    if (hitBox != null) {
+        System.out.println("Hitbox exists for head");
+    }
+}
+
+// Or retrieve/create in one call
+HitBox hitBox = tracker.hitbox(
+    tracker.sourceEntity(),
+    null,  // listener
+    bone -> bone.name().toString().equals("head")
+);
+```
+
+### Accessing from Registry
+
+Get all hitboxes for an entity:
+
+```java
+import kr.toxicity.model.api.tracker.EntityTrackerRegistry;
+
+BetterModel.registry(entity.getUniqueId()).ifPresent(registry -> {
+    registry.hitBoxCache().forEach((uuid, hitBox) -> {
+        System.out.println("Hitbox: " + hitBox.groupName());
+    });
+});
+```
+
+### Removing Hitboxes
+
+Remove a specific hitbox:
+
+```java
+HitBox hitBox = // your hitbox
+hitBox.removeHitBox();
+```
+
+## Mounting System
+
+### Mount Controllers
+
+Control mounting behavior:
+
+```java
+import kr.toxicity.model.api.mount.MountController;
+import kr.toxicity.model.api.mount.MountControllers;
+
+HitBox hitBox = // your hitbox
+
+// Allow mounting
+hitBox.mountController(MountControllers.ALLOW);
+
+// Allow mounting and control
+hitBox.mountController(MountControllers.CONTROL);
+
+// Disable mounting
+hitBox.mountController(MountControllers.DENY);
+```
+
+### Mounting Entities
+
+Mount an entity to a hitbox:
+
+```java
+import kr.toxicity.model.api.platform.PlatformEntity;
+
+PlatformEntity entity = BukkitAdapter.adapt(player);
+HitBox hitBox = // your hitbox
+
+// Mount the entity
+hitBox.mount(entity);
+
+// Check if mounted
+if (hitBox.hasMountDriver()) {
+    System.out.println("Entity is mounted");
+}
+
+// Dismount
+hitBox.dismount(entity);
+
+// Dismount all
+hitBox.dismountAll();
+```
+
+### Mount Events
+
+Listen for mount/dismount:
+
+```java
+import kr.toxicity.model.api.event.MountModelEvent;
+import kr.toxicity.model.api.event.DismountModelEvent;
+
+@EventHandler
+public void onMount(MountModelEvent event) {
+    EntityTracker tracker = event.tracker();
+    RenderedBone bone = event.bone();
+    HitBox hitBox = event.hitBox();
+    PlatformEntity entity = event.entity();
+    
+    System.out.println(entity.name() + " mounted " + bone.name());
+}
+
+@EventHandler
+public void onDismount(DismountModelEvent event) {
+    System.out.println("Entity dismounted");
+}
+```
+
+### Vehicle Movement
+
+Check if passenger is walking:
+
+```java
+HitBox hitBox = // your hitbox
+
+if (hitBox.onWalk()) {
+    System.out.println("Passenger is walking");
+    // Play walking animation
+    tracker.animate("walk");
+}
+```
+
+## Advanced Hitbox Usage
+
+### Conditional Hitbox Creation
+
+Create hitboxes based on conditions:
+
+```java
+tracker.createHitBox(
+    null,
+    BonePredicate.tag("clickable")
+        .and(bone -> bone.name().toString().startsWith("interactive_"))
+);
+```
+
+### Dynamic Hitbox Listeners
+
+Change hitbox behavior at runtime:
+
+```java
+// Track hitbox state
+Map<HitBox, Integer> clickCounts = new HashMap<>();
+
+tracker.listenHitBox((bone, builder) -> builder
+    .interact(event -> {
+        HitBox hitBox = event.hitBox();
+        int clicks = clickCounts.getOrDefault(hitBox, 0) + 1;
+        clickCounts.put(hitBox, clicks);
+        
+        if (clicks >= 3) {
+            System.out.println("Unlocked after 3 clicks!");
+            hitBox.removeHitBox();
+        }
+    })
+);
+```
+
+### Multi-Hitbox Interactions
+
+Create complex interaction patterns:
+
+```java
+public class PuzzleModel {
+    private final Set<String> activatedBones = new HashSet<>();
+    
+    public void setupPuzzle(EntityTracker tracker) {
+        tracker.listenHitBox((bone, builder) -> builder
+            .interact(event -> {
+                String boneName = bone.name().toString();
+                
+                if (boneName.startsWith("button_")) {
+                    activatedBones.add(boneName);
+                    
+                    // Visual feedback
+                    tracker.update(
+                        TrackerUpdateAction.tint(0x00FF00),
+                        b -> b.name().toString().equals(boneName)
+                    );
+                    
+                    // Check completion
+                    if (activatedBones.size() == 4) {
+                        completePuzzle(tracker);
+                    }
+                }
+            })
+        );
+    }
+    
+    private void completePuzzle(EntityTracker tracker) {
+        tracker.animate("unlock", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+    }
+}
+```
+
+### Hitbox Visibility Control
+
+Show/hide hitboxes for specific players:
+
+```java
+import kr.toxicity.model.api.platform.PlatformPlayer;
+
+HitBox hitBox = // your hitbox
+PlatformPlayer player = BukkitAdapter.adapt(bukkitPlayer);
+
+// Hide from player
+hitBox.hide(player);
+
+// Show to player
+hitBox.show(player);
+```
+
+## Hitbox Best Practices
+
+<Note>
+**Performance Tips:**
+- Limit hitboxes to interactive areas only
+- Use bone tags for automatic creation
+- Avoid creating/destroying hitboxes frequently
+- Cache hitbox references when possible
+</Note>
+
+<Warning>
+**Common Pitfalls:**
+- Hitboxes follow animations - ensure bones are properly positioned
+- Large hitbox counts can impact performance
+- Mount points require proper pivot positioning
+- Hitbox size is determined by bone group configuration
+</Warning>
+
+### Naming Conventions
+
+Use clear, descriptive bone names:
+
+```
+interactive_chest_lid
+clickable_button_red
+mount_seat_driver
+hitbox_head_damage
+```
+
+### Size Configuration
+
+Configure hitbox size in bone groups:
+
+```yaml
+# In your model configuration
+groups:
+  head:
+    hitbox:
+      width: 0.8
+      height: 0.8
+      depth: 0.8
+```
+
+## Debugging Hitboxes
+
+### Visual Debugging
+
+Make hitboxes visible temporarily:
+
+```java
+// Set hitbox to visible (for debugging)
+// Note: This requires NMS access
+tracker.bones().forEach(bone -> {
+    HitBox hitBox = bone.getHitBox();
+    if (hitBox != null) {
+        System.out.println("Hitbox at: " + bone.name());
+        System.out.println("Position: " + hitBox.relativePosition());
+    }
+});
+```
+
+### Logging Interactions
+
+```java
+tracker.listenHitBox((bone, builder) -> builder
+    .interact(event -> {
+        System.out.println("=== Hitbox Interaction ===");
+        System.out.println("Bone: " + bone.name());
+        System.out.println("Player: " + event.player().name());
+        System.out.println("Hand: " + event.hand());
+        System.out.println("=========================");
+    })
+);
+```
+
+## Example: Interactive NPC
+
+```java
+public class InteractiveNPC {
+    
+    public void createNPC(Location location) {
+        DummyTracker tracker = BetterModel.model("npc_villager")
+            .map(r -> r.create(BukkitAdapter.adapt(location)))
+            .orElse(null);
+        
+        if (tracker == null) return;
+        
+        // Create clickable head
+        tracker.listenHitBox((bone, builder) -> {
+            if (bone.name().toString().equals("head")) {
+                return builder.interact(event -> {
+                    PlatformPlayer player = event.player();
+                    
+                    // Play greeting animation
+                    tracker.animate("wave", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+                    
+                    // Send message
+                    player.sendMessage("Hello, " + player.name() + "!");
+                });
+            }
+            return builder;
+        });
+        
+        // Create hitboxes
+        tracker.task(() -> tracker.createHitBox(
+            null,
+            BonePredicate.name("head")
+        ));
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Player Models" icon="user" href="/guides/player-models">
+    Work with player limb models and customization
+  </Card>
+  <Card title="Per-Player Animation" icon="users" href="/guides/per-player-animation">
+    Individual animation states per player
+  </Card>
+</CardGroup>

@@ -1,0 +1,377 @@
+---
+title: TrackerAnimation
+description: A configuration record for applying animations to Tracker instances with lifecycle hooks
+---
+
+`TrackerAnimation` defines how an animation should be applied to a tracker, including priority, conditions, and lifecycle callbacks.
+
+## Package
+
+```java
+kr.toxicity.model.api.tracker.TrackerAnimation<T extends Tracker>
+```
+
+## Type Parameters
+
+- `T` - The type of tracker this animation applies to
+
+## Record Components
+
+| Component | Type | Description |
+|-----------|------|-------------|
+| `name` | `String` | The unique name of the animation |
+| `priority` | `int` | Animation priority (higher values take precedence) |
+| `targetClass` | `Class<T>` | The class type of the tracker |
+| `applyCondition` | `Predicate<? super T>` | Condition to check if animation can play |
+| `modifierBuilder` | `Function<? super T, AnimationModifier>` | Function providing animation modifier |
+| `removeTask` | `Consumer<? super T>` | Task run when animation is removed |
+| `successTask` | `Consumer<? super T>` | Task run when animation starts successfully |
+| `fallbackTask` | `Consumer<? super T>` | Task run when animation fails to start |
+
+**Since:** 2.2.0
+
+## Static Methods
+
+### builder(String)
+
+```java
+public static @NotNull Builder<Tracker> builder(@NotNull String name)
+```
+
+Creates a new builder for a `TrackerAnimation`.
+
+**Parameters:**
+- `name` - The name of the animation
+
+**Returns:** A new builder instance
+
+**Since:** 2.2.0
+
+## Instance Methods
+
+### compareTo(TrackerAnimation)
+
+```java
+public int compareTo(@NonNull TrackerAnimation<T> o)
+```
+
+Compares animations by priority (higher first), then by name alphabetically.
+
+Implements `Comparable<TrackerAnimation<T>>`.
+
+## Builder Class
+
+The `TrackerAnimation.Builder` provides a fluent API for constructing tracker animations.
+
+### Builder Methods
+
+#### type(Class)
+
+```java
+public <R extends T> Builder<R> type(@NotNull Class<R> newTargetClass)
+```
+
+Changes the target tracker type for this builder.
+
+**Parameters:**
+- `newTargetClass` - The new target class
+
+**Returns:** A new builder for the specified type
+
+**Since:** 2.2.0
+
+#### priority(int)
+
+```java
+public @NotNull Builder<T> priority(int priority)
+```
+
+Sets the priority of the animation. Higher values take precedence.
+
+**Parameters:**
+- `priority` - The priority value
+
+**Returns:** This builder
+
+**Since:** 2.2.0
+
+#### check(Predicate)
+
+```java
+public @NotNull Builder<T> check(@NotNull Predicate<? super T> applyCondition)
+```
+
+Sets the condition that must be met for the animation to play.
+
+**Parameters:**
+- `applyCondition` - The condition predicate
+
+**Returns:** This builder
+
+**Since:** 2.2.0
+
+#### modifier(Function)
+
+```java
+public @NotNull Builder<T> modifier(
+    @NotNull Function<? super T, AnimationModifier> modifierBuilder
+)
+```
+
+Sets the function that provides an `AnimationModifier`.
+
+**Parameters:**
+- `modifierBuilder` - Function providing the modifier
+
+**Returns:** This builder
+
+**Since:** 2.2.0
+
+#### onRemove(Consumer)
+
+```java
+public @NotNull Builder<T> onRemove(@NotNull Consumer<? super T> removeTask)
+```
+
+Sets the task to run when the animation is removed.
+
+**Parameters:**
+- `removeTask` - The removal task
+
+**Returns:** This builder
+
+**Since:** 2.2.0
+
+#### onSuccess(Consumer)
+
+```java
+public @NotNull Builder<T> onSuccess(@NotNull Consumer<? super T> successTask)
+```
+
+Sets the task to run when the animation starts successfully.
+
+**Parameters:**
+- `successTask` - The success task
+
+**Returns:** This builder
+
+**Since:** 2.2.0
+
+#### onFallback(Consumer)
+
+```java
+public @NotNull Builder<T> onFallback(@NotNull Consumer<? super T> fallbackTask)
+```
+
+Sets the task to run when the animation fails to start.
+
+**Parameters:**
+- `fallbackTask` - The fallback task
+
+**Returns:** This builder
+
+**Since:** 2.2.0
+
+#### build()
+
+```java
+public @NotNull TrackerAnimation<T> build()
+```
+
+Builds the `TrackerAnimation` instance.
+
+**Returns:** The constructed animation
+
+**Since:** 2.2.0
+
+## Usage Examples
+
+### Basic Tracker Animation
+
+```java
+TrackerAnimation<Tracker> animation = TrackerAnimation.builder("walk")
+    .priority(10)
+    .check(tracker -> tracker.isMoving())
+    .build();
+```
+
+### Animation with Modifier
+
+```java
+TrackerAnimation<Tracker> animation = TrackerAnimation.builder("run")
+    .priority(20)
+    .check(tracker -> tracker.isSprinting())
+    .modifier(tracker -> AnimationModifier.builder()
+        .speed(1.5f)
+        .type(AnimationIterator.Type.LOOP)
+        .build())
+    .build();
+```
+
+### Animation with Lifecycle Hooks
+
+```java
+TrackerAnimation<PlayerTracker> animation = TrackerAnimation.builder("attack")
+    .type(PlayerTracker.class)
+    .priority(50)
+    .onSuccess(tracker -> {
+        tracker.playSound("entity.player.attack");
+        tracker.spawnParticles();
+    })
+    .onRemove(tracker -> {
+        tracker.resetCombatState();
+    })
+    .onFallback(tracker -> {
+        tracker.sendMessage("Animation failed to play");
+    })
+    .build();
+```
+
+### Conditional Animation
+
+```java
+TrackerAnimation<Tracker> animation = TrackerAnimation.builder("swim")
+    .priority(15)
+    .check(tracker -> tracker.isInWater())
+    .modifier(tracker -> AnimationModifier.builder()
+        .predicate(() -> !tracker.isOnGround())
+        .start(5)
+        .end(5)
+        .build())
+    .build();
+```
+
+### Type-Specific Animation
+
+```java
+// Start with generic tracker
+TrackerAnimation.Builder<Tracker> builder = TrackerAnimation.builder("custom");
+
+// Specialize to EntityTracker
+TrackerAnimation<EntityTracker> entityAnim = builder
+    .type(EntityTracker.class)
+    .check(tracker -> tracker.getEntity().isAlive())
+    .modifier(tracker -> {
+        float healthPercent = tracker.getEntity().getHealth() / 
+                              tracker.getEntity().getMaxHealth();
+        return AnimationModifier.builder()
+            .speed(0.5f + healthPercent)
+            .build();
+    })
+    .build();
+```
+
+### Priority-Based Animation System
+
+```java
+List<TrackerAnimation<Tracker>> animations = Arrays.asList(
+    TrackerAnimation.builder("idle")
+        .priority(0)
+        .build(),
+    
+    TrackerAnimation.builder("walk")
+        .priority(10)
+        .check(tracker -> tracker.isMoving())
+        .build(),
+    
+    TrackerAnimation.builder("run")
+        .priority(20)
+        .check(tracker -> tracker.isSprinting())
+        .build(),
+    
+    TrackerAnimation.builder("jump")
+        .priority(30)
+        .check(tracker -> !tracker.isOnGround())
+        .build()
+);
+
+// Sort by priority (highest first)
+Collections.sort(animations);
+
+// Play first matching animation
+for (TrackerAnimation<Tracker> anim : animations) {
+    if (anim.play(tracker)) {
+        break;
+    }
+}
+```
+
+### Animation with Dynamic Speed
+
+```java
+TrackerAnimation<PlayerTracker> animation = TrackerAnimation.builder("mine")
+    .type(PlayerTracker.class)
+    .check(tracker -> tracker.isMining())
+    .modifier(tracker -> {
+        float efficiency = tracker.getToolEfficiency();
+        return AnimationModifier.builder()
+            .speed(() -> 1.0f + (efficiency * 0.1f))
+            .type(AnimationIterator.Type.LOOP)
+            .build();
+    })
+    .build();
+```
+
+### Cleanup on Animation End
+
+```java
+TrackerAnimation<Tracker> animation = TrackerAnimation.builder("special")
+    .priority(100)
+    .modifier(tracker -> AnimationModifier.builder()
+        .type(AnimationIterator.Type.PLAY_ONCE)
+        .build())
+    .onSuccess(tracker -> {
+        tracker.startCooldown("special", 100);
+    })
+    .onRemove(tracker -> {
+        tracker.clearEffects();
+        tracker.resetAnimationState();
+    })
+    .build();
+```
+
+### State-Based Animation
+
+```java
+TrackerAnimation<EntityTracker> animation = TrackerAnimation.builder("combat")
+    .type(EntityTracker.class)
+    .priority(40)
+    .check(tracker -> tracker.isInCombat())
+    .modifier(tracker -> {
+        boolean isBlocking = tracker.isBlocking();
+        return AnimationModifier.builder()
+            .type(isBlocking ? 
+                AnimationIterator.Type.HOLD_ON_LAST : 
+                AnimationIterator.Type.LOOP)
+            .speed(isBlocking ? 0.5f : 1.0f)
+            .build();
+    })
+    .build();
+```
+
+### Animation Override System
+
+```java
+TrackerAnimation<Tracker> overrideAnim = TrackerAnimation.builder("emote")
+    .priority(999)  // Very high priority
+    .modifier(tracker -> AnimationModifier.builder()
+        .override(true)
+        .type(AnimationIterator.Type.PLAY_ONCE)
+        .start(5)
+        .end(10)
+        .build())
+    .onSuccess(tracker -> {
+        tracker.lockMovement();
+    })
+    .onRemove(tracker -> {
+        tracker.unlockMovement();
+    })
+    .build();
+```
+
+## See Also
+
+- [AnimationModifier](/api/animation-modifier) - Animation playback modifier
+- [AnimationIterator](/api/animation-iterator) - Animation loop behavior
+- [BlueprintAnimation](/api/blueprint-animation) - Complete animation data
+- [Tracker](/api/tracker) - Base tracker interface

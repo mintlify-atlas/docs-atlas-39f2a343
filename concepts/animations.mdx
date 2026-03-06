@@ -1,0 +1,498 @@
+---
+title: "Animations"
+description: "Playing and controlling model animations with AnimationModifier"
+icon: "film"
+---
+
+## Overview
+
+Animations bring your models to life. BetterModel's animation system supports:
+
+- Keyframe-based animations from BlockBench
+- Multiple animation layers and blending
+- Per-player animations
+- Dynamic animation speed and conditions
+- Smooth interpolation and transitions
+
+## Animation Basics
+
+Animations are defined in your `.bbmodel` file and loaded automatically with the model.
+
+### Playing Animations
+
+```java src/main/java/com/example/BasicAnimation.java
+// Play animation by name
+tracker.animate("walk");
+
+// With modifier
+tracker.animate("attack", AnimationModifier.DEFAULT);
+
+// With completion callback
+tracker.animate("death", AnimationModifier.DEFAULT, () -> {
+    System.out.println("Animation finished!");
+    tracker.close();
+});
+```
+
+### Animation Types
+
+Animations can loop or play once:
+
+```java
+// Loop animation (defined in .bbmodel)
+tracker.animate("idle");  // Loops automatically
+
+// Play once
+tracker.animate("attack", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+
+// Custom loop type
+tracker.animate("walk", AnimationModifier.builder()
+    .type(AnimationIterator.Type.LOOP)  // Force loop
+    .build()
+);
+```
+
+**Animation Loop Types:**
+
+<ParamField path="LOOP" type="AnimationIterator.Type">
+  Animation repeats indefinitely until stopped
+</ParamField>
+
+<ParamField path="PLAY_ONCE" type="AnimationIterator.Type">
+  Animation plays once then automatically stops
+</ParamField>
+
+<ParamField path="HOLD" type="AnimationIterator.Type">
+  Animation plays once and holds the last frame
+</ParamField>
+
+## Animation Modifier
+
+The `AnimationModifier` controls animation playback behavior.
+
+### Basic Usage
+
+```java src/main/java/com/example/AnimationModifier.java
+AnimationModifier modifier = AnimationModifier.builder()
+    .start(10)           // Lerp-in time (ticks)
+    .end(5)              // Lerp-out time (ticks)
+    .speed(1.5f)         // 1.5x speed
+    .type(AnimationIterator.Type.LOOP)
+    .build();
+
+tracker.animate("run", modifier);
+```
+
+### Lerp Transitions
+
+Smooth transitions between animations:
+
+```java
+// Start with 10 tick fade-in
+tracker.animate("walk", AnimationModifier.builder()
+    .start(10)  // Smooth blend from previous pose
+    .build()
+);
+
+// Stop with 5 tick fade-out
+tracker.animate("idle", AnimationModifier.builder()
+    .end(5)  // Smooth blend to new pose
+    .build()
+);
+```
+
+<Info>
+  Lerp (linear interpolation) values are in Minecraft ticks (1 tick = 50ms).
+</Info>
+
+### Animation Speed
+
+```java
+// Play at 2x speed
+tracker.animate("attack", AnimationModifier.builder()
+    .speed(2.0f)
+    .build()
+);
+
+// Play at half speed
+tracker.animate("walk", AnimationModifier.builder()
+    .speed(0.5f)
+    .build()
+);
+
+// Dynamic speed based on entity velocity
+tracker.animate("run", AnimationModifier.builder()
+    .speed(() -> {
+        Vector velocity = entity.getVelocity();
+        return (float) velocity.length() * 2;
+    })
+    .build()
+);
+```
+
+### Conditional Animations
+
+Play animations only when conditions are met:
+
+```java
+// Animation plays only while entity is on ground
+tracker.animate("walk", AnimationModifier.builder()
+    .predicate(() -> entity.isOnGround())
+    .build()
+);
+
+// Animation stops when condition becomes false
+tracker.animate("fly", AnimationModifier.builder()
+    .predicate(() -> !entity.isOnGround())
+    .build()
+);
+```
+
+<Warning>
+  Predicates are checked every tick. Keep them lightweight to avoid performance issues.
+</Warning>
+
+### Animation Override
+
+Control whether new animations can interrupt current ones:
+
+```java
+// This animation can be interrupted
+tracker.animate("idle", AnimationModifier.builder()
+    .override(true)
+    .build()
+);
+
+// This animation cannot be interrupted
+tracker.animate("attack", AnimationModifier.builder()
+    .override(false)
+    .build()
+);
+
+// Later attempts to play other animations will fail
+// until "attack" completes
+```
+
+## Per-Player Animations
+
+Different animations for different players:
+
+```java src/main/java/com/example/PerPlayerAnimation.java
+// Play animation only for specific player
+tracker.animate("wave", AnimationModifier.builder()
+    .player(targetPlayer)
+    .build()
+);
+
+// Each player sees different animation
+for (Player player : players) {
+    if (player.hasPermission("vip")) {
+        tracker.animate("special_idle", AnimationModifier.builder()
+            .player(player)
+            .build()
+        );
+    } else {
+        tracker.animate("idle", AnimationModifier.builder()
+            .player(player)
+            .build()
+        );
+    }
+}
+```
+
+<Note>
+  Per-player animations use more resources. Use sparingly and only when necessary.
+</Note>
+
+## Stopping Animations
+
+### Stop by Name
+
+```java
+// Stop specific animation
+tracker.stopAnimation("walk");
+
+// Stop animation on filtered bones
+tracker.stopAnimation(
+    bone -> bone.name().tagged(BoneTags.HEAD),
+    "nod"
+);
+
+// Stop animation for specific player
+tracker.stopAnimation(
+    bone -> true,
+    "wave",
+    player
+);
+```
+
+### Replace Animations
+
+Replace one animation with another:
+
+```java
+// Replace "walk" with "run"
+tracker.replace("walk", "run", AnimationModifier.DEFAULT);
+
+// With smooth transition
+tracker.replace("walk", "run", AnimationModifier.builder()
+    .start(5)   // 5 tick blend
+    .build()
+);
+```
+
+## Animation Queries
+
+Check animation state:
+
+```java
+// Get animation from renderer
+Optional<BlueprintAnimation> animation = tracker.renderer()
+    .animation("attack");
+
+animation.ifPresent(anim -> {
+    System.out.println("Duration: " + anim.duration());
+    System.out.println("Loop: " + anim.loop());
+});
+
+// Get all animations
+Map<String, BlueprintAnimation> animations = tracker.renderer()
+    .animations();
+```
+
+## Advanced: TrackerAnimation
+
+Create reusable animation sequences:
+
+```java src/main/java/com/example/TrackerAnimation.java
+// Create custom animation sequence
+TrackerAnimation<?> customSequence = TrackerAnimation.of(
+    tracker -> {
+        // Custom animation logic
+        tracker.animate("windup", AnimationModifier.DEFAULT_WITH_PLAY_ONCE,
+            () -> tracker.animate("attack", AnimationModifier.DEFAULT_WITH_PLAY_ONCE,
+                () -> tracker.animate("idle")
+            )
+        );
+    }
+);
+
+// Play the sequence
+tracker.animate(customSequence);
+
+// With completion callback
+tracker.animate(customSequence, () -> {
+    System.out.println("Sequence complete!");
+});
+```
+
+## Animation Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use appropriate lerp times" icon="clock">
+    Smooth transitions improve visual quality:
+    
+    ```java
+    // Fast actions: short lerp
+    tracker.animate("attack", AnimationModifier.builder()
+        .start(2)
+        .end(2)
+        .build()
+    );
+    
+    // Slow movements: longer lerp
+    tracker.animate("walk", AnimationModifier.builder()
+        .start(10)
+        .end(10)
+        .build()
+    );
+    ```
+  </Accordion>
+  
+  <Accordion title="Chain animations with callbacks" icon="link">
+    Create animation sequences:
+    
+    ```java
+    tracker.animate("prepare", AnimationModifier.DEFAULT_WITH_PLAY_ONCE,
+        () -> tracker.animate("attack", AnimationModifier.DEFAULT_WITH_PLAY_ONCE,
+            () -> tracker.animate("idle")
+        )
+    );
+    ```
+  </Accordion>
+  
+  <Accordion title="Optimize per-player animations" icon="users">
+    Use per-player animations sparingly:
+    
+    ```java
+    // Bad: creates per-player state for everyone
+    for (Player p : allPlayers) {
+        tracker.animate("idle", AnimationModifier.builder()
+            .player(p)
+            .build()
+        );
+    }
+    
+    // Good: only when needed
+    if (vipPlayer != null) {
+        tracker.animate("vip_idle", AnimationModifier.builder()
+            .player(vipPlayer)
+            .build()
+        );
+    } else {
+        tracker.animate("idle");
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use predicates for state-based animations" icon="check-circle">
+    Conditional animations for reactive behavior:
+    
+    ```java
+    // Walking animation only when moving
+    tracker.animate("walk", AnimationModifier.builder()
+        .predicate(() -> {
+            Vector velocity = entity.getVelocity();
+            return velocity.lengthSquared() > 0.01;
+        })
+        .build()
+    );
+    ```
+  </Accordion>
+  
+  <Accordion title="Match animation speed to entity speed" icon="gauge">
+    Dynamic speed for realistic movement:
+    
+    ```java
+    tracker.animate("walk", AnimationModifier.builder()
+        .speed(() -> {
+            float velocity = (float) entity.getVelocity().length();
+            return Math.max(0.5f, velocity * 2);
+        })
+        .build()
+    );
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Example: State Machine
+
+```java src/main/java/com/example/AnimationStateMachine.java
+public class NPCAnimationController {
+    private final EntityTracker tracker;
+    private final Entity entity;
+    private String currentState = "idle";
+    
+    public NPCAnimationController(EntityTracker tracker, Entity entity) {
+        this.tracker = tracker;
+        this.entity = entity;
+        
+        // Update animation based on state every tick
+        tracker.tick((t, bundler) -> updateAnimation());
+    }
+    
+    private void updateAnimation() {
+        String newState = determineState();
+        
+        if (!newState.equals(currentState)) {
+            transitionTo(newState);
+            currentState = newState;
+        }
+    }
+    
+    private String determineState() {
+        if (!entity.isOnGround()) {
+            return "fall";
+        }
+        
+        Vector velocity = entity.getVelocity();
+        double speed = velocity.lengthSquared();
+        
+        if (speed > 0.1) {
+            return speed > 0.5 ? "run" : "walk";
+        }
+        
+        return "idle";
+    }
+    
+    private void transitionTo(String newState) {
+        AnimationModifier modifier = AnimationModifier.builder()
+            .start(5)  // Smooth 5-tick transition
+            .build();
+        
+        tracker.animate(newState, modifier);
+    }
+    
+    public void playAction(String action) {
+        // Play one-shot action animation
+        tracker.animate(action, AnimationModifier.DEFAULT_WITH_PLAY_ONCE,
+            () -> {
+                // Return to state-based animation
+                transitionTo(currentState);
+            }
+        );
+    }
+}
+```
+
+## Example: Combat Animations
+
+```java src/main/java/com/example/CombatAnimations.java
+public class CombatAnimations {
+    public static void setupCombatEntity(EntityTracker tracker, LivingEntity entity) {
+        // Idle when standing still
+        tracker.animate("combat_idle", AnimationModifier.builder()
+            .predicate(() -> entity.getVelocity().lengthSquared() < 0.01)
+            .build()
+        );
+        
+        // Walk while moving
+        tracker.animate("combat_walk", AnimationModifier.builder()
+            .predicate(() -> entity.getVelocity().lengthSquared() > 0.01)
+            .speed(() -> (float) entity.getVelocity().length() * 2)
+            .build()
+        );
+        
+        // Handle attacks
+        tracker.task(() -> {
+            entity.setAI(true);  // Custom AI
+        });
+    }
+    
+    public static void playAttackAnimation(EntityTracker tracker) {
+        // Stop current animations
+        tracker.stopAnimation("combat_idle");
+        tracker.stopAnimation("combat_walk");
+        
+        // Play attack with quick transitions
+        tracker.animate("attack", AnimationModifier.builder()
+            .start(2)  // Fast wind-up
+            .end(3)    // Fast recovery
+            .type(AnimationIterator.Type.PLAY_ONCE)
+            .override(false)  // Cannot be interrupted
+            .build(),
+            () -> {
+                // Resume idle/walk after attack
+                setupCombatEntity(tracker, null);
+            }
+        );
+    }
+}
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Trackers" icon="crosshairs" href="/concepts/trackers">
+    Managing tracker lifecycle
+  </Card>
+  <Card title="Bones & Hitboxes" icon="skeleton" href="/concepts/bones-and-hitboxes">
+    Per-bone animation control
+  </Card>
+  <Card title="Conditional Animations" icon="function" href="/examples/conditional-animations">
+    Dynamic animations with conditions
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/animation-modifier">
+    Complete AnimationModifier API
+  </Card>
+</CardGroup>

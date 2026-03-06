@@ -1,0 +1,221 @@
+---
+title: Installation
+description: Add BetterModel to your Bukkit or Fabric project
+---
+
+BetterModel is available on Maven Central for Bukkit/Spigot/Paper plugins and Fabric mods. Follow the instructions below for your build system.
+
+## Version Requirements
+
+- **Minecraft**: 1.21 - 1.21.11
+- **Java**: 21 or higher
+- **Bukkit Platforms**: Paper, Purpur, Spigot, Folia, Leaf, Canvas
+- **Mod Platforms**: Fabric Loader
+
+<Note>
+BetterModel requires **Java 21 or higher**. Make sure your project targets the correct language level.
+</Note>
+
+## Maven Central (Release)
+
+For stable releases, use Maven Central.
+
+<CodeGroup>
+
+```kotlin Gradle (Kotlin DSL)
+repositories {
+    mavenCentral()
+    // For Fabric only - add these transitive dependencies
+    maven("https://maven.blamejared.com/")
+    maven("https://maven.nucleoid.xyz/")
+}
+
+dependencies {
+    // For Bukkit (Spigot, Paper, etc.)
+    compileOnly("io.github.toxicity188:bettermodel-bukkit-api:2.2.0")
+    
+    // For Fabric mods
+    // modApi("io.github.toxicity188:bettermodel-fabric:2.2.0")
+}
+```
+
+```groovy Gradle (Groovy)
+repositories {
+    mavenCentral()
+    // For Fabric only - add these transitive dependencies
+    maven 'https://maven.blamejared.com/'
+    maven 'https://maven.nucleoid.xyz/'
+}
+
+dependencies {
+    // For Bukkit (Spigot, Paper, etc.)
+    compileOnly 'io.github.toxicity188:bettermodel-bukkit-api:2.2.0'
+    
+    // For Fabric mods
+    // modApi 'io.github.toxicity188:bettermodel-fabric:2.2.0'
+}
+```
+
+```xml Maven
+<repositories>
+    <repository>
+        <id>central</id>
+        <url>https://repo.maven.apache.org/maven2</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <!-- For Bukkit (Spigot, Paper, etc.) -->
+    <dependency>
+        <groupId>io.github.toxicity188</groupId>
+        <artifactId>bettermodel-bukkit-api</artifactId>
+        <version>2.2.0</version>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+```
+
+</CodeGroup>
+
+<Note>
+Replace `2.2.0` with the latest version from [Maven Central](https://central.sonatype.com/artifact/io.github.toxicity188/bettermodel-api).
+</Note>
+
+## GitHub Packages (Snapshot)
+
+For bleeding-edge snapshot builds, use GitHub Packages. You'll need a GitHub personal access token.
+
+<Warning>
+Snapshot builds are unstable and may contain breaking changes. Use only for testing.
+</Warning>
+
+<Steps>
+  <Step title="Generate GitHub Token">
+    Create a [personal access token](https://github.com/settings/tokens) with `read:packages` permission.
+  </Step>
+  
+  <Step title="Add Repository and Dependency">
+    Configure your build file with GitHub Packages authentication:
+
+<CodeGroup>
+
+```kotlin Gradle (Kotlin DSL)
+repositories {
+    maven("https://maven.pkg.github.com/toxicity188/BetterModel") {
+        credentials {
+            username = project.findProperty("gpr.user") as String? ?: System.getenv("GITHUB_USERNAME")
+            password = project.findProperty("gpr.token") as String? ?: System.getenv("GITHUB_TOKEN")
+        }
+    }
+    maven("https://maven.blamejared.com/") // For Fabric transitive deps
+    maven("https://maven.nucleoid.xyz/")   // For Fabric transitive deps
+}
+
+dependencies {
+    compileOnly("io.github.toxicity188:bettermodel-bukkit-api:2.2.0-SNAPSHOT")
+    // modApi("io.github.toxicity188:bettermodel-fabric:2.2.0-SNAPSHOT")
+}
+```
+
+```groovy Gradle (Groovy)
+repositories {
+    maven {
+        url "https://maven.pkg.github.com/toxicity188/BetterModel"
+        credentials {
+            username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_USERNAME')
+            password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+        }
+    }
+    maven 'https://maven.blamejared.com/' // For Fabric transitive deps
+    maven 'https://maven.nucleoid.xyz/'   // For Fabric transitive deps
+}
+
+dependencies {
+    compileOnly 'io.github.toxicity188:bettermodel-bukkit-api:2.2.0-SNAPSHOT'
+    // modApi 'io.github.toxicity188:bettermodel-fabric:2.2.0-SNAPSHOT'
+}
+```
+
+```xml Maven
+<repositories>
+    <repository>
+        <id>github</id>
+        <url>https://maven.pkg.github.com/toxicity188/BetterModel</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>io.github.toxicity188</groupId>
+        <artifactId>bettermodel-api</artifactId>
+        <version>2.2.0-SNAPSHOT</version>
+        <scope>provided</scope>
+    </dependency>
+    <dependency>
+        <groupId>io.github.toxicity188</groupId>
+        <artifactId>bettermodel-bukkit-api</artifactId>
+        <version>2.2.0-SNAPSHOT</version>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+```
+
+</CodeGroup>
+
+  </Step>
+  
+  <Step title="Store Credentials Securely">
+    Add your GitHub credentials to `~/.gradle/gradle.properties`:
+    
+    ```properties
+    gpr.user=YOUR_GITHUB_USERNAME
+    gpr.token=YOUR_GITHUB_TOKEN
+    ```
+  </Step>
+</Steps>
+
+## Plugin Setup
+
+After adding the dependency, declare BetterModel as a dependency in your `plugin.yml`:
+
+```yaml plugin.yml
+name: YourPlugin
+version: 1.0.0
+main: com.example.YourPlugin
+api-version: 1.21
+depend:
+  - BetterModel
+```
+
+<Note>
+Use `depend` if BetterModel is required, or `softdepend` if it's optional.
+</Note>
+
+## Verification
+
+Verify the installation by checking that BetterModel classes are available:
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.data.renderer.ModelRenderer;
+
+public class YourPlugin extends JavaPlugin {
+    @Override
+    public void onEnable() {
+        getLogger().info("BetterModel API version: " + BetterModel.platform().version());
+    }
+}
+```
+
+If the code compiles and the plugin loads, you're ready to go!
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Learn how to spawn and animate your first model
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/bettermodel">
+    Explore the full BetterModel API
+  </Card>
+</CardGroup>

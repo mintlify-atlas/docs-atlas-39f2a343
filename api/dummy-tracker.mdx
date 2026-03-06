@@ -1,0 +1,318 @@
+---
+title: "DummyTracker"
+description: "Tracker implementation for standalone models at fixed locations"
+---
+
+## Overview
+
+The `DummyTracker` class is a `Tracker` implementation that is not attached to any entity. Dummy trackers are positioned at a fixed location in the world and can be moved manually. They are useful for static models, decorative elements, or models controlled entirely by scripts, plugins, or mods.
+
+**Package:** `kr.toxicity.model.api.tracker`
+
+**Extends:** `Tracker`
+
+**Since:** 1.15.2
+
+## Key Features
+
+- **Fixed Position**: Positioned at a specific location, independent of entities
+- **Manual Control**: All movement and rotation must be controlled programmatically
+- **Lightweight**: No entity synchronization overhead
+- **Static or Dynamic**: Can be completely static or dynamically controlled
+- **Custom Rotation**: Rotation based on location pitch/yaw
+
+## Constructor
+
+```java
+public DummyTracker(
+    @NotNull PlatformLocation location,
+    @NotNull RenderPipeline pipeline,
+    @NotNull TrackerModifier modifier,
+    @NotNull Consumer<DummyTracker> preUpdateConsumer
+)
+```
+
+Creates a new dummy tracker.
+
+**Parameters:**
+- `location` - The initial location
+- `pipeline` - The render pipeline
+- `modifier` - The tracker modifier
+- `preUpdateConsumer` - A consumer to run before the first update
+
+<Note>
+This constructor is public but typically you should use `BetterModelAPI.createDummyTracker()` or similar factory methods.
+</Note>
+
+## Methods
+
+### Location Management
+
+#### location
+```java
+public @NotNull PlatformLocation location()
+```
+Returns the current location of the tracker.
+
+**Returns:** The location
+
+#### location (setter)
+```java
+public void location(@NotNull PlatformLocation location)
+```
+Moves the model to a new location.
+
+This method handles teleporting all bones and sending packets to all viewing players.
+
+**Parameters:**
+- `location` - The new location (must not be null)
+
+<Warning>
+This method is synchronized and involves packet sending. Avoid calling it excessively (e.g., every tick) for performance reasons.
+</Warning>
+
+### Player Management
+
+#### spawn
+```java
+public void spawn(@NotNull PlatformPlayer player)
+```
+Spawns the model for a specific player.
+
+This immediately spawns the model and sends all necessary packets to the player.
+
+**Parameters:**
+- `player` - The target player
+
+## Default Behavior
+
+When a `DummyTracker` is created:
+
+1. **Spawn Animation**: Automatically plays the "spawn" animation with `PLAY_ONCE` modifier (if available)
+2. **Scale**: Uses the configured `ModelScaler` from the tracker
+3. **Rotation**: Uses the location's pitch and yaw for model rotation
+
+## Usage Examples
+
+### Creating a Dummy Tracker
+
+```java
+import kr.toxicity.model.api.BetterModelAPI;
+import kr.toxicity.model.api.platform.PlatformLocation;
+import kr.toxicity.model.api.tracker.DummyTracker;
+import kr.toxicity.model.api.tracker.TrackerModifier;
+
+// Get location
+PlatformLocation location = world.getLocation(100, 64, 100);
+
+// Create dummy tracker
+DummyTracker tracker = BetterModelAPI.getInstance()
+    .createDummyTracker(location, "statue", TrackerModifier.DEFAULT);
+```
+
+### Moving a Dummy Tracker
+
+```java
+DummyTracker tracker = ...;
+
+// Move to new location
+PlatformLocation newLocation = world.getLocation(150, 64, 150);
+tracker.location(newLocation);
+
+// Move with rotation
+PlatformLocation rotatedLocation = world.getLocation(150, 64, 150)
+    .withPitch(0F)
+    .withYaw(90F);
+tracker.location(rotatedLocation);
+```
+
+### Animated Movement
+
+```java
+DummyTracker tracker = ...;
+PlatformLocation start = tracker.location();
+PlatformLocation end = world.getLocation(200, 64, 200);
+
+int totalTicks = 100; // 5 seconds
+AtomicInteger tick = new AtomicInteger(0);
+
+tracker.tick((t, bundler) -> {
+    int current = tick.getAndIncrement();
+    if (current >= totalTicks) return;
+    
+    // Linear interpolation
+    double progress = (double) current / totalTicks;
+    double x = start.x() + (end.x() - start.x()) * progress;
+    double y = start.y() + (end.y() - start.y()) * progress;
+    double z = start.z() + (end.z() - start.z()) * progress;
+    
+    tracker.location(world.getLocation(x, y, z));
+});
+```
+
+### Rotating Dummy Tracker
+
+```java
+DummyTracker tracker = ...;
+
+// Continuously rotate
+float[] yaw = {0F};
+tracker.tick((t, bundler) -> {
+    yaw[0] += 5F; // 5 degrees per tick
+    if (yaw[0] >= 360F) yaw[0] -= 360F;
+    
+    PlatformLocation loc = tracker.location();
+    tracker.location(loc.withYaw(yaw[0]));
+});
+```
+
+### Static Decoration
+
+```java
+// Create a completely static decoration
+PlatformLocation location = world.getLocation(100, 64, 100);
+DummyTracker statue = BetterModelAPI.getInstance()
+    .createDummyTracker(location, "statue", TrackerModifier.DEFAULT);
+
+// No need to move it - it stays at the location
+
+// Optionally pause ticking to save resources
+statue.pause(true);
+```
+
+### Interactive Dummy
+
+```java
+DummyTracker tracker = ...;
+
+// Add hitbox for interaction
+tracker.listenHitBox(HitBoxInteractEvent.class, event -> {
+    PlatformPlayer player = event.getPlayer();
+    player.sendMessage("You clicked the statue!");
+    
+    // Play animation on interaction
+    tracker.animate("wave", AnimationModifier.DEFAULT);
+});
+
+tracker.createHitBox(
+    null, // No entity needed for dummy tracker
+    null,
+    BonePredicate.TRUE // All bones
+);
+```
+
+### Spawning for Specific Players
+
+```java
+DummyTracker tracker = ...;
+
+// Spawn only for specific player
+PlatformPlayer player = ...;
+tracker.spawn(player);
+
+// Or use standard visibility controls
+tracker.show(player1);
+tracker.hide(player2);
+```
+
+### Cleanup
+
+```java
+DummyTracker tracker = ...;
+
+// Close when done
+tracker.close();
+
+// Check if already closed
+if (tracker.isClosed()) {
+    System.out.println("Tracker is closed");
+}
+```
+
+## Common Use Cases
+
+### 1. Static Decorations
+
+Use dummy trackers for decorative models that don't move:
+- Statues
+- Furniture
+- Buildings
+- Signs
+
+```java
+for (PlatformLocation loc : decorationLocations) {
+    DummyTracker decoration = api.createDummyTracker(
+        loc,
+        "decoration_" + random.nextInt(),
+        TrackerModifier.DEFAULT
+    );
+    decoration.pause(true); // Save resources
+}
+```
+
+### 2. Animated Props
+
+Use for props with looping animations:
+- Windmills
+- Waterfalls
+- Flags
+
+```java
+DummyTracker windmill = api.createDummyTracker(location, "windmill", modifier);
+windmill.animate("spin", AnimationModifier.builder().loop(true).build());
+```
+
+### 3. Cutscene Elements
+
+Use for scripted cutscene models:
+- NPCs in cutscenes
+- Moving platforms
+- Cinematic objects
+
+```java
+DummyTracker npc = api.createDummyTracker(startLocation, "npc", modifier);
+npc.animate("idle");
+
+// Script movement and animations
+scheduler.runLater(() -> {
+    npc.location(waypoint1);
+    npc.animate("walk");
+}, 20);
+```
+
+### 4. World Bosses (Non-Entity)
+
+Use for custom boss models not tied to entities:
+
+```java
+DummyTracker boss = api.createDummyTracker(arenaCenter, "boss", modifier);
+boss.animate("idle");
+
+// Custom AI logic
+boss.tick((t, bundler) -> {
+    // Update boss position and rotation
+    // Play attack animations
+    // Handle combat logic
+});
+```
+
+## Performance Considerations
+
+1. **Location Updates**: Minimize calls to `location(PlatformLocation)` as they send packets to all viewers
+2. **Pausing**: Use `pause(true)` for completely static models to save CPU
+3. **View Distance**: Use `TrackerModifier.sightTrace(false)` if models don't need line-of-sight checks
+4. **Animations**: Static models should use `AnimationModifier.playOnce(true)` for spawn animations
+
+## Events
+
+The following events are fired for dummy trackers:
+
+- `CreateDummyTrackerEvent` - When the tracker is created
+- All standard `Tracker` events (spawn, despawn, close, etc.)
+
+## See Also
+
+- [Tracker](tracker) - Base tracker class
+- [EntityTracker](entity-tracker) - Tracker attached to entities
+- [TrackerModifier](tracker-modifier) - Configuration options
+- [TrackerUpdateAction](tracker-update-action) - Update actions

@@ -1,0 +1,201 @@
+---
+title: BoneName
+description: Represents a tagged name identifier for bones in the model hierarchy
+---
+
+The `BoneName` record represents a parsed bone name with associated tags. It's used throughout BetterModel to identify and filter bones based on their naming conventions.
+
+## Class Information
+
+**Package:** `kr.toxicity.model.api.bone`  
+**Type:** Record  
+**Since:** 1.0.0
+
+## Record Components
+
+```java
+public record BoneName(
+    @NotNull @Unmodifiable Set<BoneTag> tags,
+    @NotNull String name,
+    @NotNull String rawName
+)
+```
+
+### Components
+
+- **tags** - The set of tags extracted from the raw name (e.g., `#hitbox`, `#head`)
+- **name** - The clean name without tags
+- **rawName** - The original unparsed name string
+
+## Creation
+
+### Parsing from String
+
+```java
+public static BoneName of(String rawName)
+```
+
+Parses a raw bone name string into a `BoneName` instance. Tags are extracted based on the configured tag registry.
+
+**Example:**
+```java
+// Parse bone name with tags
+BoneName boneName = BoneName.of("#hitbox#interactive.head");
+
+System.out.println(boneName.name());     // "head"
+System.out.println(boneName.rawName());  // "#hitbox#interactive.head"
+System.out.println(boneName.tags().size()); // 2
+```
+
+### JSON Deserialization
+
+```java
+public static final JsonDeserializer<BoneName> PARSER
+```
+
+A JSON deserializer for automatic parsing in configuration files.
+
+**Example JSON:**
+```json
+{
+  "bone": "#weapon.sword_blade"
+}
+```
+
+## Tag Management
+
+### Checking for Tags
+
+```java
+public boolean tagged(BoneTag... tags)
+```
+
+Checks if this bone name contains any of the specified tags.
+
+**Example:**
+```java
+BoneName boneName = BoneName.of("#hitbox#head.skull");
+
+if (boneName.tagged(BoneTag.of("hitbox"))) {
+    System.out.println("This bone should have a hitbox");
+}
+
+if (boneName.tagged(
+    BoneTag.of("hitbox"),
+    BoneTag.of("interactive")
+)) {
+    System.out.println("This bone has at least one of these tags");
+}
+```
+
+### Getting Item Mapper from Tags
+
+```java
+public BoneItemMapper toItemMapper()
+```
+
+Converts bone tags to an appropriate item mapper. Returns `BoneItemMapper.EMPTY` if no tags specify a mapper.
+
+**Example:**
+```java
+BoneName boneName = BoneName.of("#left_hand.item");
+BoneItemMapper mapper = boneName.toItemMapper();
+
+// Use mapper for item transformation
+TransformedItemStack stack = mapper.apply(context, itemStack);
+```
+
+## Common Tag Patterns
+
+BetterModel uses tags to define special behaviors for bones:
+
+### Display Tags
+- `#left_hand` - Display as left-hand item
+- `#right_hand` - Display as right-hand item  
+- `#head` - Display as head/helmet item
+
+### Functional Tags
+- `#hitbox` - Should create a hitbox
+- `#interactive` - Interactive element
+- `#mount` - Mountable bone
+
+### Example Usage
+
+```java
+// Create bones with specific behaviors
+BoneName weapon = BoneName.of("#right_hand.sword");
+BoneName helmet = BoneName.of("#head.crown");
+BoneName hitbox = BoneName.of("#hitbox.body");
+
+// Filter bones by tags
+renderedBone.flatten()
+    .filter(bone -> bone.name().tagged(BoneTag.of("hitbox")))
+    .forEach(bone -> {
+        // Create hitboxes for all tagged bones
+        bone.createHitBox(entity, b -> true, listener);
+    });
+```
+
+## Equality and Hashing
+
+Bone names are compared based on their `rawName` field:
+
+```java
+@Override
+public boolean equals(Object o)
+
+@Override
+public int hashCode()
+```
+
+**Example:**
+```java
+BoneName bone1 = BoneName.of("#hitbox.head");
+BoneName bone2 = BoneName.of("#hitbox.head");
+BoneName bone3 = BoneName.of("#interactive.head");
+
+System.out.println(bone1.equals(bone2)); // true
+System.out.println(bone1.equals(bone3)); // false
+```
+
+## String Representation
+
+```java
+@Override
+public String toString()
+```
+
+Returns the raw name string.
+
+**Example:**
+```java
+BoneName boneName = BoneName.of("#hitbox#weapon.sword");
+System.out.println(boneName.toString()); // "#hitbox#weapon.sword"
+```
+
+## Naming Conventions
+
+When naming bones in your 3D modeling software:
+
+1. **Use descriptive names**: `head`, `left_arm`, `weapon`
+2. **Add tags with `#` prefix**: `#hitbox.body`, `#left_hand.item`
+3. **Use dot notation for hierarchy**: `armor.helmet`, `weapon.blade`
+4. **Combine multiple tags**: `#hitbox#interactive.door`
+
+**Example bone hierarchy:**
+```
+player_model
+├── #head.head
+├── body
+│   └── #hitbox.torso
+├── #left_hand.left_arm
+│   └── hand
+└── #right_hand#weapon.right_arm
+    └── sword_blade
+```
+
+## See Also
+
+- [BonePredicate](/api/bone-predicate) - Filtering bones by name and tags
+- [RenderedBone](/api/rendered-bone) - Working with rendered bones
+- [BoneItemMapper](/api/bone-item-mapper) - Item transformation based on tags

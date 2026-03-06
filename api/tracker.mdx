@@ -1,0 +1,477 @@
+---
+title: "Tracker"
+description: "Abstract base class for model instance controllers"
+---
+
+## Overview
+
+The `Tracker` class is the core controller for a specific model instance in BetterModel. It manages the lifecycle, rendering, animation, and player interaction of a model, coordinating with the `RenderPipeline` to update bone positions and send packets to players.
+
+**Package:** `kr.toxicity.model.api.tracker`
+
+**Since:** 1.15.2
+
+## Key Concepts
+
+- **Lifecycle Management**: Controls spawning, despawning, and closing of model instances
+- **Animation Control**: Plays, stops, and replaces animations on the model
+- **Player Visibility**: Manages which players can see the model
+- **Scheduled Updates**: Runs periodic tasks at frame-rate (25ms) or Minecraft tick intervals (50ms)
+- **Bone Management**: Provides access to individual bones for manipulation
+
+## Constructor
+
+```java
+public Tracker(@NotNull RenderPipeline pipeline, @NotNull TrackerModifier modifier)
+```
+
+Creates a new tracker.
+
+**Parameters:**
+- `pipeline` - The render pipeline
+- `modifier` - The tracker modifier configuration
+
+## Core Methods
+
+### Lifecycle
+
+#### location
+```java
+public abstract @NotNull PlatformLocation location()
+```
+Returns the current location of the model.
+
+#### close
+```java
+public void close()
+```
+Closes the tracker and removes the model (calls `close(CloseReason.REMOVE)`).
+
+#### despawn
+```java
+public void despawn()
+```
+Despawns the model for all players without closing the tracker completely.
+
+#### isClosed
+```java
+public boolean isClosed()
+```
+Checks if the tracker has been closed.
+
+### Animation
+
+#### animate
+```java
+public boolean animate(@NotNull String animation)
+public boolean animate(@NotNull String animation, @NotNull AnimationModifier modifier)
+public boolean animate(@NotNull String animation, @NotNull AnimationModifier modifier, @NotNull Runnable removeTask)
+public boolean animate(@NotNull BlueprintAnimation animation, @NotNull AnimationModifier modifier)
+public boolean animate(@NotNull BlueprintAnimation animation, @NotNull AnimationModifier modifier, @NotNull Runnable removeTask)
+```
+Plays an animation by name or blueprint.
+
+**Returns:** `true` if the animation started
+
+#### stopAnimation
+```java
+public boolean stopAnimation(@NotNull String animation)
+public boolean stopAnimation(@NotNull Predicate<RenderedBone> filter, @NotNull String animation)
+public boolean stopAnimation(@NotNull Predicate<RenderedBone> filter, @NotNull String animation, @Nullable PlatformPlayer player)
+```
+Stops an animation by name, optionally on filtered bones.
+
+**Returns:** `true` if the animation was stopped
+
+#### replace
+```java
+public boolean replace(@NotNull String target, @NotNull String animation, @NotNull AnimationModifier modifier)
+public boolean replace(@NotNull String target, @NotNull BlueprintAnimation animation, @NotNull AnimationModifier modifier)
+```
+Replaces a running animation with a new one.
+
+**Returns:** `true` if the replacement occurred
+
+### Rotation and Scale
+
+#### rotation
+```java
+public @NotNull ModelRotation rotation()
+public void rotation(@NotNull Supplier<ModelRotation> supplier)
+```
+Gets the current rotation or sets the rotation supplier.
+
+#### rotator
+```java
+public void rotator(@NotNull ModelRotator rotator)
+```
+Sets the model rotator strategy.
+
+#### scaler
+```java
+public @NotNull ModelScaler scaler()
+public void scaler(@NotNull ModelScaler scaler)
+```
+Gets or sets the model scaler.
+
+### Scheduling
+
+#### task
+```java
+public void task(@NotNull Runnable runnable)
+```
+Schedules a task to run on the next tracker tick (Minecraft tick).
+
+#### frame
+```java
+public void frame(@NotNull ScheduledPacketHandler handler)
+```
+Registers a handler to run every frame (25ms tracker tick).
+
+#### tick
+```java
+public void tick(@NotNull ScheduledPacketHandler handler)
+public void tick(long tick, @NotNull ScheduledPacketHandler handler)
+```
+Registers a handler to run every Minecraft tick (50ms) or every N ticks.
+
+#### schedule
+```java
+public void schedule(long period, @NotNull ScheduledPacketHandler handler)
+```
+Schedules a handler to run periodically.
+
+#### perPlayerTick
+```java
+public void perPlayerTick(@NotNull BiConsumer<Tracker, PlatformPlayer> perPlayerHandler)
+```
+Registers a handler to run every tick for each visible player.
+
+### Bone Access
+
+#### bone
+```java
+public @Nullable RenderedBone bone(@NotNull BoneName name)
+public @Nullable RenderedBone bone(@NotNull String name)
+public @Nullable RenderedBone bone(@NotNull Predicate<RenderedBone> predicate)
+```
+Retrieves a bone by name or predicate.
+
+**Returns:** The bone, or `null` if not found
+
+#### bones
+```java
+public @NotNull @Unmodifiable Collection<RenderedBone> bones()
+```
+Returns a collection of all bones in the model.
+
+#### displays
+```java
+public @NotNull Stream<ModelDisplay> displays()
+```
+Returns a stream of all model displays.
+
+### Update Actions
+
+#### update
+```java
+public <T extends TrackerUpdateAction> void update(@NotNull T action)
+public <T extends TrackerUpdateAction> void update(@NotNull T action, @NotNull Predicate<RenderedBone> predicate)
+public <T extends TrackerUpdateAction> void update(@NotNull T action, @NotNull BonePredicate predicate)
+```
+Forces an update action on all or filtered bones.
+
+#### tryUpdate
+```java
+public boolean tryUpdate(@NotNull BiPredicate<RenderedBone, BonePredicate> action, @NotNull BonePredicate predicate)
+```
+Tries to apply an update action to bones matching a predicate.
+
+**Returns:** `true` if any bones were updated
+
+### HitBox and Nametag
+
+#### createHitBox
+```java
+public boolean createHitBox(@NotNull BaseEntity entity, @Nullable HitBoxListener listener, @NotNull BonePredicate predicate)
+```
+Creates a hitbox for bones matching a predicate.
+
+**Returns:** `true` if any hitboxes were created
+
+#### hitbox
+```java
+public @Nullable HitBox hitbox(@NotNull BaseEntity entity, @Nullable HitBoxListener listener, @NotNull Predicate<RenderedBone> predicate)
+```
+Retrieves or creates a hitbox for a specific bone.
+
+**Returns:** The hitbox, or `null` if not found/created
+
+#### createNametag
+```java
+public boolean createNametag(@NotNull BonePredicate predicate, @NotNull BiConsumer<RenderedBone, ModelNametag> consumer)
+```
+Creates a nametag for bones matching a predicate.
+
+**Returns:** `true` if any nametags were created
+
+#### listenHitBox
+```java
+public void listenHitBox(@NotNull BiFunction<RenderedBone, HitBoxListener.Builder, HitBoxListener.Builder> function)
+public <T extends HitBoxEvent> void listenHitBox(@NotNull Class<T> eventClass, @NotNull Consumer<T> consumer)
+```
+Registers hitbox event listeners for newly created hitboxes.
+
+### Player Visibility
+
+#### hide
+```java
+public boolean hide(@NotNull PlatformPlayer player)
+```
+Hides the tracker from a specific player.
+
+**Returns:** `true` if hidden successfully
+
+#### show
+```java
+public boolean show(@NotNull PlatformPlayer player)
+```
+Shows the tracker to a specific player.
+
+**Returns:** `true` if shown successfully
+
+#### isHide
+```java
+public boolean isHide(@NotNull PlatformPlayer player)
+```
+Checks if the tracker is hidden from a specific player.
+
+#### isSpawned
+```java
+public boolean isSpawned(@NotNull UUID uuid)
+public boolean isSpawned(@NotNull PlatformPlayer player)
+```
+Checks if the model is spawned for a player.
+
+### Other Methods
+
+#### pause
+```java
+public boolean pause(boolean pause)
+```
+Pauses or resumes the tracker's ticking.
+
+**Returns:** `true` if the state changed
+
+#### forceUpdate
+```java
+public boolean forceUpdate(boolean force)
+```
+Flags the tracker for a forced update on the next tick.
+
+**Returns:** `true` if the state changed
+
+#### height
+```java
+public double height()
+```
+Calculates the height of the model based on its head bone position.
+
+#### name
+```java
+public @NotNull String name()
+```
+Returns the name of the model being tracked.
+
+#### playerCount
+```java
+public int playerCount()
+```
+Returns the number of players currently viewing the model.
+
+#### renderer
+```java
+public @NotNull ModelRenderer renderer()
+```
+Returns the renderer associated with this tracker.
+
+#### modifier
+```java
+public @NotNull TrackerModifier modifier()
+```
+Returns the tracker modifier.
+
+#### handleCloseEvent
+```java
+public void handleCloseEvent(@NotNull BiConsumer<Tracker, CloseReason> consumer)
+```
+Registers a handler for the tracker close event.
+
+## Constants
+
+#### TRACKER_TICK_INTERVAL
+```java
+public static final int TRACKER_TICK_INTERVAL = 25
+```
+The interval in milliseconds between tracker ticks.
+
+#### MINECRAFT_TICK_MULTIPLIER
+```java
+public static final int MINECRAFT_TICK_MULTIPLIER = 2
+```
+The multiplier to convert tracker ticks to Minecraft ticks (50ms).
+
+## Inner Classes
+
+### ScheduledPacketHandler
+
+Functional interface for handling scheduled packets.
+
+```java
+@FunctionalInterface
+public interface ScheduledPacketHandler {
+    void handle(@NotNull Tracker tracker, @NotNull BundlerSet bundlerSet);
+    default @NotNull ScheduledPacketHandler then(@NotNull ScheduledPacketHandler other);
+}
+```
+
+### BundlerSet
+
+Holds different types of packet bundlers for a tracker tick.
+
+```java
+public final class BundlerSet {
+    public PacketBundler getTickBundler();
+    public PacketBundler getDataBundler();
+    public PacketBundler getViewBundler();
+}
+```
+
+### CloseReason
+
+Enum representing reasons for closing a tracker.
+
+```java
+public enum CloseReason {
+    REMOVE,           // Manually removed
+    PLUGIN_DISABLE,   // Plugin disabled
+    DESPAWN           // Entity despawned
+}
+```
+
+## Usage Examples
+
+### Basic Animation Control
+
+```java
+Tracker tracker = ...; // Obtain from EntityTracker or DummyTracker
+
+// Play an animation
+tracker.animate("walk");
+
+// Play with modifier and completion callback
+tracker.animate("attack", AnimationModifier.DEFAULT, () -> {
+    System.out.println("Attack animation completed");
+});
+
+// Stop an animation
+tracker.stopAnimation("walk");
+
+// Replace an animation
+tracker.replace("walk", "run", AnimationModifier.DEFAULT);
+```
+
+### Scheduling Tasks
+
+```java
+// Run on next Minecraft tick
+tracker.task(() -> {
+    System.out.println("Running on next tick");
+});
+
+// Run every frame (25ms)
+tracker.frame((t, bundlerSet) -> {
+    // High-frequency update logic
+});
+
+// Run every Minecraft tick (50ms)
+tracker.tick((t, bundlerSet) -> {
+    // Regular update logic
+});
+
+// Run every 5 ticks
+tracker.tick(5, (t, bundlerSet) -> {
+    System.out.println("Every 5 ticks");
+});
+
+// Per-player tick
+tracker.perPlayerTick((t, player) -> {
+    // Logic for each visible player
+});
+```
+
+### Bone Manipulation
+
+```java
+// Find a specific bone
+RenderedBone headBone = tracker.bone("head");
+if (headBone != null) {
+    // Manipulate bone
+}
+
+// Update all bones
+tracker.update(TrackerUpdateAction.glow(true));
+
+// Update filtered bones
+tracker.update(
+    TrackerUpdateAction.brightness(15, 15),
+    bone -> bone.name().toString().contains("weapon")
+);
+
+// Apply tint
+tracker.update(TrackerUpdateAction.tint(0xFF0000)); // Red tint
+```
+
+### HitBox Management
+
+```java
+// Listen for hitbox interactions
+tracker.listenHitBox(HitBoxInteractEvent.class, event -> {
+    System.out.println("Player interacted with model");
+    event.getPlayer().sendMessage("You clicked the model!");
+});
+
+// Create hitbox with custom listener
+tracker.createHitBox(
+    entity,
+    HitBoxListener.builder()
+        .interact(event -> { /* handle interaction */ })
+        .build(),
+    BonePredicate.name("body")
+);
+```
+
+### Player Visibility
+
+```java
+// Hide from specific player
+tracker.hide(player);
+
+// Show to specific player
+tracker.show(player);
+
+// Check if spawned for player
+if (tracker.isSpawned(player)) {
+    System.out.println("Model is visible to player");
+}
+
+// Get player count
+int viewers = tracker.playerCount();
+```
+
+## See Also
+
+- [EntityTracker](entity-tracker) - Tracker attached to entities
+- [DummyTracker](dummy-tracker) - Standalone tracker at fixed location
+- [TrackerModifier](tracker-modifier) - Configuration options
+- [TrackerUpdateAction](tracker-update-action) - Update action types

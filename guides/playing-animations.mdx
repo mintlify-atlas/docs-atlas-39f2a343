@@ -1,0 +1,445 @@
+---
+title: Playing Animations
+description: Control animation playback, transitions, and per-player animations
+icon: play
+---
+
+## Overview
+
+BetterModel provides a powerful animation system that supports looping, single-play animations, speed control, blending, and per-player animation states.
+
+## Basic Animation Playback
+
+### Playing an Animation
+
+Play an animation by name:
+
+```java
+import kr.toxicity.model.api.tracker.Tracker;
+
+Tracker tracker = // your tracker
+
+// Play with default settings (loop)
+boolean success = tracker.animate("walk");
+
+if (success) {
+    System.out.println("Animation started");
+} else {
+    System.out.println("Animation not found");
+}
+```
+
+### Play Once
+
+Play an animation a single time:
+
+```java
+import kr.toxicity.model.api.animation.AnimationModifier;
+
+tracker.animate("attack", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+```
+
+### Animation with Callback
+
+Execute code when an animation finishes:
+
+```java
+tracker.animate("death", AnimationModifier.DEFAULT_WITH_PLAY_ONCE, () -> {
+    System.out.println("Death animation finished");
+    tracker.close(); // Remove the tracker
+});
+```
+
+## Animation Modifiers
+
+### Creating Custom Modifiers
+
+`AnimationModifier` controls how animations play:
+
+```java
+import kr.toxicity.model.api.animation.AnimationIterator;
+
+AnimationModifier modifier = AnimationModifier.builder()
+    .start(10)              // Lerp-in time (ticks)
+    .end(5)                 // Lerp-out time (ticks)
+    .speed(1.5F)            // 1.5x speed
+    .type(AnimationIterator.Type.PLAY_ONCE) // Play once
+    .override(true)         // Override other animations
+    .build();
+
+tracker.animate("run", modifier);
+```
+
+### Animation Types
+
+```java
+public enum Type {
+    LOOP,       // Loop indefinitely
+    PLAY_ONCE,  // Play once and stop
+    HOLD        // Play once and hold the last frame
+}
+```
+
+Example usage:
+
+```java
+// Loop continuously
+AnimationModifier looping = AnimationModifier.builder()
+    .type(AnimationIterator.Type.LOOP)
+    .build();
+
+// Play once
+AnimationModifier once = AnimationModifier.builder()
+    .type(AnimationIterator.Type.PLAY_ONCE)
+    .build();
+
+// Hold last frame
+AnimationModifier hold = AnimationModifier.builder()
+    .type(AnimationIterator.Type.HOLD)
+    .build();
+```
+
+### Speed Control
+
+Adjust animation speed:
+
+```java
+// Static speed
+AnimationModifier fast = AnimationModifier.builder()
+    .speed(2.0F)  // 2x speed
+    .build();
+
+AnimationModifier slow = AnimationModifier.builder()
+    .speed(0.5F)  // Half speed
+    .build();
+
+// Dynamic speed
+AnimationModifier dynamic = AnimationModifier.builder()
+    .speed(() -> entity.isSprinting() ? 1.5F : 1.0F)
+    .build();
+```
+
+### Lerp (Blend) Transitions
+
+Smooth transitions between animations:
+
+```java
+AnimationModifier smooth = AnimationModifier.builder()
+    .start(20)  // 20 ticks (1 second) blend in
+    .end(10)    // 10 ticks (0.5 seconds) blend out
+    .build();
+
+tracker.animate("walk", smooth);
+```
+
+<Tip>
+Use longer lerp times for smoother transitions between animations. A value of 10-20 ticks works well for most cases.
+</Tip>
+
+### Conditional Animations
+
+Play animations based on conditions:
+
+```java
+AnimationModifier conditional = AnimationModifier.builder()
+    .predicate(() -> entity.isOnGround()) // Only play when on ground
+    .build();
+
+tracker.animate("walk", conditional);
+```
+
+## Stopping Animations
+
+### Stop by Name
+
+Stop a specific animation:
+
+```java
+// Stop on all bones
+boolean stopped = tracker.stopAnimation("walk");
+
+// Stop on specific bones
+tracker.stopAnimation(
+    bone -> bone.name().toString().contains("arm"),
+    "attack"
+);
+```
+
+### Stop for Specific Player
+
+Stop a per-player animation:
+
+```java
+import kr.toxicity.model.api.platform.PlatformPlayer;
+
+PlatformPlayer player = BukkitAdapter.adapt(bukkitPlayer);
+
+tracker.stopAnimation(
+    bone -> true,
+    "custom_animation",
+    player
+);
+```
+
+## Animation Replacement
+
+### Replace Running Animation
+
+Seamlessly transition from one animation to another:
+
+```java
+// Replace "walk" with "run"
+tracker.replace("walk", "run", AnimationModifier.DEFAULT);
+
+// With custom modifier
+AnimationModifier fast = AnimationModifier.builder()
+    .speed(1.5F)
+    .start(5)
+    .build();
+
+tracker.replace("idle", "attack", fast);
+```
+
+### Using Blueprint Animations
+
+Replace with a blueprint animation object:
+
+```java
+import kr.toxicity.model.api.data.blueprint.BlueprintAnimation;
+
+tracker.renderer().animation("special_attack").ifPresent(animation -> {
+    tracker.replace("attack", animation, AnimationModifier.DEFAULT);
+});
+```
+
+## Per-Player Animations
+
+### What are Per-Player Animations?
+
+Per-player animations show different animations to different players for the same model. This is essential for:
+
+- Custom player emotes visible only to nearby players
+- Player-specific effects
+- Individualized NPC interactions
+
+### Playing Per-Player Animations
+
+Use the `player()` modifier to target specific players:
+
+```java
+import org.bukkit.entity.Player;
+
+Player targetPlayer = // the player who should see this animation
+
+AnimationModifier perPlayer = AnimationModifier.builder()
+    .player(BukkitAdapter.adapt(targetPlayer))
+    .type(AnimationIterator.Type.PLAY_ONCE)
+    .build();
+
+tracker.animate("wave", perPlayer);
+```
+
+### Per-Player Events
+
+Listen for per-player animation events:
+
+```java
+import kr.toxicity.model.api.event.PlayerPerAnimationStartEvent;
+import kr.toxicity.model.api.event.PlayerPerAnimationEndEvent;
+import org.bukkit.event.EventHandler;
+
+@EventHandler
+public void onPerPlayerAnimStart(PlayerPerAnimationStartEvent event) {
+    Tracker tracker = event.tracker();
+    PlatformPlayer player = event.player();
+    
+    System.out.println("Per-player animation started for: " + player.name());
+}
+
+@EventHandler
+public void onPerPlayerAnimEnd(PlayerPerAnimationEndEvent event) {
+    System.out.println("Per-player animation ended");
+}
+```
+
+<Warning>
+Per-player animations increase packet overhead. Use them sparingly and only when necessary.
+</Warning>
+
+## Built-in Animations
+
+### Spawn Animation
+
+Automatic animations on tracker creation:
+
+```java
+// The "spawn" animation plays automatically if defined
+DummyTracker tracker = BetterModel.model("npc")
+    .map(r -> r.create(BukkitAdapter.adapt(location)))
+    .orElse(null);
+
+// Built-in animations are played via TrackerBuiltInAnimation
+import kr.toxicity.model.api.tracker.TrackerBuiltInAnimation;
+
+// You can also manually trigger built-in animations
+TrackerBuiltInAnimation.play(tracker);
+```
+
+### Damage Animation
+
+Automatic damage animation on entity hit (if enabled in `TrackerModifier`):
+
+```java
+EntityTracker tracker = // your tracker
+
+// Trigger damage tint manually
+tracker.damageTint();
+
+// Cancel damage tint
+tracker.cancelDamageTint();
+
+// Set custom damage tint color
+tracker.damageTintValue(0xFF0000); // Red
+tracker.damageTint();
+```
+
+## Animation Layering
+
+### Override vs. Blend
+
+```java
+// Blend with existing animations (default)
+AnimationModifier blend = AnimationModifier.builder()
+    .override(false)
+    .build();
+
+tracker.animate("attack", blend);
+
+// Override all animations on affected bones
+AnimationModifier override = AnimationModifier.builder()
+    .override(true)
+    .build();
+
+tracker.animate("attack", override);
+```
+
+### Bone-Specific Animations
+
+Play animations on specific bones:
+
+```java
+import kr.toxicity.model.api.data.blueprint.BlueprintAnimation;
+
+tracker.renderer().animation("wave_arm").ifPresent(animation -> {
+    // This animation will only affect bones it's designed for
+    tracker.animate(animation, AnimationModifier.DEFAULT);
+});
+```
+
+## Advanced Patterns
+
+### Animation State Machine
+
+Implement a simple state machine:
+
+```java
+public class EntityAnimationController {
+    private final Tracker tracker;
+    private String currentState = "idle";
+    
+    public void setState(String newState) {
+        if (currentState.equals(newState)) return;
+        
+        // Replace current animation with new one
+        tracker.replace(currentState, newState, AnimationModifier.builder()
+            .start(5)
+            .end(5)
+            .build()
+        );
+        
+        currentState = newState;
+    }
+    
+    public void tick(Entity entity) {
+        if (entity.isOnGround() && entity.getVelocity().lengthSquared() > 0.01) {
+            setState("walk");
+        } else if (entity.isOnGround()) {
+            setState("idle");
+        } else {
+            setState("jump");
+        }
+    }
+}
+```
+
+### Combo Attacks
+
+Chain animations together:
+
+```java
+public void performCombo(Tracker tracker) {
+    tracker.animate("attack_1", AnimationModifier.DEFAULT_WITH_PLAY_ONCE, () -> {
+        tracker.animate("attack_2", AnimationModifier.DEFAULT_WITH_PLAY_ONCE, () -> {
+            tracker.animate("attack_3", AnimationModifier.DEFAULT_WITH_PLAY_ONCE, () -> {
+                tracker.animate("idle");
+            });
+        });
+    });
+}
+```
+
+### Synchronized Group Animations
+
+Animate multiple trackers together:
+
+```java
+public void synchronizedAnimation(List<Tracker> trackers, String animation) {
+    AnimationModifier sync = AnimationModifier.DEFAULT;
+    
+    trackers.forEach(tracker -> tracker.animate(animation, sync));
+}
+```
+
+## Animation Debugging
+
+### Checking Running Animations
+
+```java
+// Access bones to check animations
+tracker.bones().forEach(bone -> {
+    System.out.println("Bone: " + bone.name());
+    // Check animation state via bone methods
+});
+```
+
+### Listing Available Animations
+
+```java
+import kr.toxicity.model.api.data.renderer.ModelRenderer;
+
+ModelRenderer renderer = tracker.renderer();
+renderer.animations().forEach((name, animation) -> {
+    System.out.println("Animation: " + name);
+});
+```
+
+## Performance Considerations
+
+<Note>
+- Use `LOOP` for continuous animations (idle, walk)
+- Use `PLAY_ONCE` for actions (attack, jump)
+- Avoid starting/stopping animations every tick
+- Cache `AnimationModifier` instances when possible
+- Limit per-player animations to visible range
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Hitboxes" icon="hand-pointer" href="/guides/custom-hitboxes">
+    Add interactive hitboxes to animated parts
+  </Card>
+  <Card title="Per-Player Animation" icon="users" href="/guides/per-player-animation">
+    Deep dive into per-player animation system
+  </Card>
+</CardGroup>

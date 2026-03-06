@@ -1,0 +1,564 @@
+---
+title: "Trackers"
+description: "Managing model instances with EntityTracker and DummyTracker"
+icon: "crosshairs"
+---
+
+## Overview
+
+A **Tracker** is the runtime controller for a specific model instance. It manages the lifecycle, rendering, animation playback, and player interaction for a single spawned model.
+
+<Info>
+  Think of `ModelRenderer` as the blueprint and `Tracker` as the living instance created from that blueprint.
+</Info>
+
+## Tracker Types
+
+BetterModel provides two tracker types:
+
+<CardGroup cols={2}>
+  <Card title="EntityTracker" icon="user">
+    Attached to entities, follows their movement
+  </Card>
+  <Card title="DummyTracker" icon="location-dot">
+    Standalone at fixed locations
+  </Card>
+</CardGroup>
+
+### EntityTracker
+
+**EntityTracker** attaches to a Minecraft entity and automatically follows its position and rotation.
+
+```java src/main/java/com/example/EntityTrackerExample.java
+ModelRenderer renderer = BetterModel.platform()
+    .modelManager()
+    .getRenderer("warrior")
+    .orElseThrow();
+
+// Create tracker attached to entity
+EntityTracker tracker = renderer.create(BaseEntity.of(entity));
+
+// Tracker will automatically follow entity movement
+// and clean itself up when no players are nearby
+```
+
+**Key Features:**
+- Automatically follows entity position and rotation
+- Registered in `EntityTrackerRegistry` for the entity
+- Persists across server restarts (for `GENERAL` type models)
+- Can be retrieved with `getOrCreate()` pattern
+
+### DummyTracker
+
+**DummyTracker** spawns a model at a fixed location without an attached entity.
+
+```java src/main/java/com/example/DummyTrackerExample.java
+ModelRenderer renderer = BetterModel.platform()
+    .modelManager()
+    .getRenderer("statue")
+    .orElseThrow();
+
+// Create tracker at location
+DummyTracker tracker = renderer.create(location);
+
+// Must manually update location if needed
+tracker.task(() -> {
+    // Custom movement logic
+});
+```
+
+**Key Features:**
+- Stationary position (unless manually updated)
+- No entity attachment
+- Useful for decorations, holograms, NPCs
+- Must be manually closed when no longer needed
+
+## Lifecycle Management
+
+### Creation
+
+Trackers are created through `ModelRenderer`:
+
+```java
+// Entity tracker
+EntityTracker tracker = renderer.create(BaseEntity.of(entity));
+
+// Dummy tracker
+DummyTracker tracker = renderer.create(location);
+
+// With modifier
+EntityTracker tracker = renderer.create(
+    BaseEntity.of(entity),
+    TrackerModifier.builder()
+        .renderDistance(128)
+        .build()
+);
+```
+
+### Scheduling and Ticking
+
+Trackers automatically start a scheduled update task when players are nearby:
+
+- **Tick Interval**: 25ms (40 ticks per second)
+- **Auto-start**: When first player comes in range
+- **Auto-pause**: When no players are in range
+- **Frame counter**: Tracks elapsed ticks since start
+
+```java
+// Check if tracker is actively updating
+if (tracker.isScheduled()) {
+    System.out.println("Tracker is running");
+}
+
+// Get current player count
+int viewers = tracker.playerCount();
+```
+
+<Note>
+  The tracker tick rate (`TRACKER_TICK_INTERVAL = 25ms`) is faster than Minecraft's tick rate (50ms) to provide smooth animations.
+</Note>
+
+### Pausing and Resuming
+
+```java
+// Pause ticking (animations stop, packets stop sending)
+tracker.pause(true);
+
+// Resume ticking
+tracker.pause(false);
+```
+
+### Closing
+
+Always close trackers when they're no longer needed:
+
+```java
+// Close the tracker
+tracker.close();
+
+// Check if closed
+if (tracker.isClosed()) {
+    System.out.println("Tracker is closed");
+}
+
+// Handle close event
+tracker.handleCloseEvent((t, reason) -> {
+    System.out.println("Closed: " + reason);
+    if (reason == Tracker.CloseReason.REMOVE) {
+        // Manual removal
+    }
+});
+```
+
+**Close Reasons:**
+
+<ParamField path="REMOVE" type="CloseReason">
+  Manually removed via `close()` - tracker state is not saved
+</ParamField>
+
+<ParamField path="PLUGIN_DISABLE" type="CloseReason">
+  Plugin is disabling - tracker state is saved for `GENERAL` models
+</ParamField>
+
+<ParamField path="DESPAWN" type="CloseReason">
+  Entity despawned - tracker state is saved for `GENERAL` models
+</ParamField>
+
+## Player Visibility
+
+### Spawning for Players
+
+Trackers automatically spawn display entities for players in range:
+
+```java
+// Check if spawned for a player
+if (tracker.isSpawned(player)) {
+    System.out.println("Model is visible to player");
+}
+
+// Check by UUID
+if (tracker.isSpawned(player.getUniqueId())) {
+    System.out.println("Model is spawned");
+}
+```
+
+### Hiding and Showing
+
+```java
+// Hide from specific player
+tracker.hide(player);
+
+// Check if hidden
+if (tracker.isHide(player)) {
+    System.out.println("Hidden from player");
+}
+
+// Show to player
+tracker.show(player);
+```
+
+<Warning>
+  Hiding a tracker doesn't remove it - it just makes display entities invisible. The tracker continues ticking.
+</Warning>
+
+### Removing from Players
+
+```java
+// Fully remove display entities for a player
+boolean removed = tracker.remove(player);
+
+if (removed) {
+    System.out.println("Removed from player");
+}
+```
+
+### Despawning
+
+```java
+// Despawn for all players (but don't close tracker)
+tracker.despawn();
+
+// Model can be respawned when players come back in range
+```
+
+## Scheduled Tasks
+
+### Frame Handlers
+
+Execute code every tracker tick (25ms):
+
+```java
+tracker.frame((t, bundler) -> {
+    // Runs every 25ms (40 times per second)
+    // bundler allows sending custom packets
+});
+```
+
+### Tick Handlers
+
+Execute code every Minecraft tick (50ms):
+
+```java
+// Every tick (50ms)
+tracker.tick((t, bundler) -> {
+    // Runs every Minecraft tick
+});
+
+// Every N ticks
+tracker.tick(20, (t, bundler) -> {
+    // Runs once per second (20 ticks)
+});
+```
+
+### Scheduled Tasks
+
+Schedule tasks at custom intervals:
+
+```java
+// Every 5 tracker ticks (125ms)
+tracker.schedule(5, (t, bundler) -> {
+    System.out.println("Custom interval");
+});
+```
+
+### Main Thread Tasks
+
+Schedule tasks to run on the main thread:
+
+```java
+tracker.task(() -> {
+    // Runs on next Minecraft tick
+    // Safe for entity/block manipulation
+    entity.setHealth(entity.getHealth() + 1);
+});
+```
+
+### Per-Player Tasks
+
+Run code for each visible player every tick:
+
+```java
+tracker.perPlayerTick((t, player) -> {
+    // Runs for each player viewing the model
+    if (player.getHealth() < 10) {
+        t.hide(player);
+    }
+});
+```
+
+## Rotation and Scaling
+
+### Rotation
+
+Control how the model rotates:
+
+```java
+// Set rotation supplier
+tracker.rotation(() -> {
+    float yaw = entity.getLocation().getYaw();
+    return ModelRotation.of(0, yaw, 0);
+});
+
+// Get current rotation
+ModelRotation rotation = tracker.rotation();
+System.out.println("Yaw: " + rotation.yaw());
+```
+
+### Rotation Strategies
+
+```java
+// Follow entity yaw only (default)
+tracker.rotator(ModelRotator.YAW);
+
+// Follow entity pitch and yaw
+tracker.rotator(ModelRotator.PITCH_AND_YAW);
+
+// No rotation
+tracker.rotator(ModelRotator.NONE);
+
+// Custom rotator
+tracker.rotator((t, baseRotation) -> {
+    // Custom rotation logic
+    return baseRotation.add(0, 45, 0);
+});
+```
+
+### Scaling
+
+```java
+// Set scaler
+tracker.scaler(ModelScaler.of(2.0f));  // 2x size
+
+// Entity-based scaling (uses entity scale)
+tracker.scaler(ModelScaler.entity());
+
+// Get current scaler
+ModelScaler scaler = tracker.scaler();
+```
+
+## Accessing Bones
+
+Get individual bones for manipulation:
+
+```java
+// Get bone by name
+RenderedBone bone = tracker.bone("head");
+if (bone != null) {
+    System.out.println("Found head bone");
+}
+
+// Get bone by BoneName
+RenderedBone bone = tracker.bone(BoneName.of("leftArm"));
+
+// Get bone by predicate
+RenderedBone bone = tracker.bone(b -> b.name().tagged(BoneTags.HEAD));
+
+// Get all bones
+Collection<RenderedBone> bones = tracker.bones();
+for (RenderedBone bone : bones) {
+    System.out.println("Bone: " + bone.name());
+}
+```
+
+## Display Entities
+
+Access underlying display entities:
+
+```java
+// Get all display entities as a stream
+tracker.displays().forEach(display -> {
+    // Manipulate display entity
+    System.out.println("Display: " + display.uuid());
+});
+```
+
+## Model Height
+
+Get the calculated height of the model:
+
+```java
+// Get model height (based on head bone position)
+double height = tracker.height();
+System.out.println("Model height: " + height);
+```
+
+<Info>
+  Height is calculated from head-tagged bones and cached per tick for performance.
+</Info>
+
+## Force Updates
+
+Force display entity data updates:
+
+```java
+// Flag for force update on next tick
+tracker.forceUpdate(true);
+
+// All display entities will send full data packets
+```
+
+## EntityTrackerRegistry
+
+For entity-based trackers, access the registry:
+
+```java
+// Get registry for an entity
+Optional<EntityTrackerRegistry> registry = BetterModel.registry(
+    entity.getUniqueId()
+);
+
+registry.ifPresent(reg -> {
+    // Get all trackers on this entity
+    Collection<EntityTracker> trackers = reg.allTrackers();
+    
+    // Get specific tracker by name
+    EntityTracker tracker = reg.getTracker("warrior").orElse(null);
+    
+    // Remove all trackers
+    reg.clear();
+});
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always close trackers" icon="times-circle">
+    Trackers consume resources. Always close them when no longer needed.
+    
+    ```java
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        BetterModel.registry(event.getEntity().getUniqueId())
+            .ifPresent(EntityTrackerRegistry::clear);
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use getOrCreate for entity trackers" icon="recycle">
+    Avoid creating duplicate trackers on the same entity.
+    
+    ```java
+    // Safe: reuses existing tracker
+    EntityTracker tracker = renderer.getOrCreate(BaseEntity.of(entity));
+    ```
+  </Accordion>
+  
+  <Accordion title="Schedule heavy operations" icon="clock">
+    Don't run expensive operations in frame handlers. Use tick handlers or scheduled tasks.
+    
+    ```java
+    // Bad: runs 40 times per second
+    tracker.frame((t, b) -> {
+        expensiveCalculation();
+    });
+    
+    // Good: runs once per second
+    tracker.tick(20, (t, b) -> {
+        expensiveCalculation();
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Use task() for entity operations" icon="server">
+    Entity manipulation must happen on the main thread.
+    
+    ```java
+    tracker.task(() -> {
+        // Safe: runs on main thread
+        entity.teleport(newLocation);
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Check isClosed before operations" icon="shield-check">
+    Always verify tracker state before operations.
+    
+    ```java
+    if (!tracker.isClosed()) {
+        tracker.animate("attack");
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Complete Example
+
+```java src/main/java/com/example/CompleteTrackerExample.java
+public class CustomNPC {
+    private final EntityTracker tracker;
+    private final Entity entity;
+    
+    public CustomNPC(Location location, ModelRenderer renderer) {
+        // Spawn invisible entity
+        this.entity = location.getWorld().spawn(
+            location,
+            Zombie.class,
+            e -> {
+                e.setAI(false);
+                e.setInvisible(true);
+                e.setInvulnerable(true);
+            }
+        );
+        
+        // Create tracker
+        this.tracker = renderer.create(
+            BaseEntity.of(entity),
+            TrackerModifier.builder()
+                .renderDistance(64)
+                .sightTrace(true)
+                .build()
+        );
+        
+        // Start idle animation
+        tracker.animate("idle");
+        
+        // Health indicator
+        tracker.perPlayerTick((t, player) -> {
+            double distance = player.getLocation().distance(
+                entity.getLocation()
+            );
+            if (distance < 5) {
+                // Show name tag when close
+            }
+        });
+        
+        // Periodic wave animation
+        tracker.tick(100, (t, bundler) -> {
+            t.animate("wave", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+        });
+        
+        // Cleanup handler
+        tracker.handleCloseEvent((t, reason) -> {
+            if (reason == Tracker.CloseReason.REMOVE) {
+                entity.remove();
+            }
+        });
+    }
+    
+    public void remove() {
+        tracker.close();
+        entity.remove();
+    }
+    
+    public boolean isActive() {
+        return !tracker.isClosed() && entity.isValid();
+    }
+}
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Models & Renderers" icon="cube" href="/concepts/models-and-renderers">
+    Creating trackers from models
+  </Card>
+  <Card title="Animations" icon="film" href="/concepts/animations">
+    Playing animations on trackers
+  </Card>
+  <Card title="Bones & Hitboxes" icon="skeleton" href="/concepts/bones-and-hitboxes">
+    Manipulating individual bones
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/tracker">
+    Complete Tracker API
+  </Card>
+</CardGroup>

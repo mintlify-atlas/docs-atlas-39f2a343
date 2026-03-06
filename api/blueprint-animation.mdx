@@ -1,0 +1,238 @@
+---
+title: BlueprintAnimation
+description: A complete, processed animation record containing all necessary data for model playback
+---
+
+`BlueprintAnimation` represents a fully processed animation for a BetterModel, including all keyframes, loop settings, and associated scripts.
+
+## Package
+
+```java
+kr.toxicity.model.api.data.blueprint.BlueprintAnimation
+```
+
+## Record Components
+
+| Component | Type | Description |
+|-----------|------|-------------|
+| `name` | `String` | The unique name of the animation |
+| `loop` | `AnimationIterator.Type` | The default loop mode |
+| `length` | `float` | The length of the animation in seconds |
+| `override` | `boolean` | Whether this animation overrides other animations |
+| `animator` | `Map<BoneName, BlueprintAnimator>` | Map of animators for each bone |
+| `script` | `BlueprintScript` | Associated script (nullable) |
+| `emptyAnimator` | `TimedStorage<AnimationProgress>` | Empty movements used as fallback |
+
+**Since:** 1.15.2
+
+## Methods
+
+### script(AnimationModifier)
+
+```java
+public @Nullable BlueprintScript script(@NotNull AnimationModifier modifier)
+```
+
+Retrieves the script for this animation, considering the provided modifier.
+
+If the modifier overrides the animation or specifies a player, the script may be suppressed.
+
+**Parameters:**
+- `modifier` - The animation modifier to consider
+
+**Returns:** The script, or null if suppressed
+
+**Since:** 1.15.2
+
+### emptyIterator(AnimationIterator.Type)
+
+```java
+public @NotNull AnimationIterator<AnimationProgress> emptyIterator(
+    @NotNull AnimationIterator.Type type
+)
+```
+
+Creates an iterator for the empty animation sequence.
+
+**Parameters:**
+- `type` - The loop type for the iterator
+
+**Returns:** An animation iterator
+
+**Since:** 1.15.2
+
+## Usage Examples
+
+### Accessing Animation Data
+
+```java
+BlueprintAnimation animation = blueprint.getAnimation("walk");
+
+String name = animation.name();
+float duration = animation.length();
+AnimationIterator.Type loopType = animation.loop();
+boolean canOverride = animation.override();
+```
+
+### Getting Bone Animators
+
+```java
+BlueprintAnimation animation = blueprint.getAnimation("attack");
+
+// Get animator for specific bone
+BoneName rightArm = BoneName.of("rightArm");
+BlueprintAnimator armAnimator = animation.animator().get(rightArm);
+
+if (armAnimator != null) {
+    // Apply animation to bone
+    applyAnimator(rightArm, armAnimator);
+}
+```
+
+### Iterating All Bone Animations
+
+```java
+BlueprintAnimation animation = blueprint.getAnimation("dance");
+
+animation.animator().forEach((boneName, animator) -> {
+    System.out.println("Animating bone: " + boneName);
+    // Apply animator to bone
+});
+```
+
+### Script Execution with Modifier
+
+```java
+BlueprintAnimation animation = blueprint.getAnimation("special_attack");
+
+// Default modifier - script will run
+AnimationModifier defaultModifier = AnimationModifier.DEFAULT;
+BlueprintScript script = animation.script(defaultModifier);
+if (script != null) {
+    script.execute();
+}
+
+// Override modifier - script may be suppressed
+AnimationModifier overrideModifier = AnimationModifier.builder()
+    .override(true)
+    .build();
+BlueprintScript suppressedScript = animation.script(overrideModifier);
+// May be null due to override
+```
+
+### Player-Specific Animation
+
+```java
+BlueprintAnimation animation = blueprint.getAnimation("emote");
+PlatformPlayer player = getPlayer();
+
+// When player is specified, script is suppressed
+AnimationModifier playerModifier = AnimationModifier.builder()
+    .player(player)
+    .build();
+
+BlueprintScript script = animation.script(playerModifier);
+// Will be null because player is specified
+```
+
+### Creating Empty Iterator
+
+```java
+BlueprintAnimation animation = blueprint.getAnimation("idle");
+
+// Create iterator for empty animation (fallback)
+AnimationIterator<AnimationProgress> emptyIter = 
+    animation.emptyIterator(AnimationIterator.Type.LOOP);
+
+while (emptyIter.hasNext()) {
+    AnimationProgress progress = emptyIter.next();
+    // Apply empty/neutral animation
+}
+```
+
+### Animation Duration and Loop
+
+```java
+BlueprintAnimation animation = blueprint.getAnimation("run");
+
+float lengthSeconds = animation.length();
+int lengthTicks = (int) (lengthSeconds * 20); // Convert to ticks
+
+if (animation.loop() == AnimationIterator.Type.LOOP) {
+    System.out.println("Animation loops every " + lengthSeconds + " seconds");
+} else if (animation.loop() == AnimationIterator.Type.PLAY_ONCE) {
+    System.out.println("Animation plays once for " + lengthSeconds + " seconds");
+}
+```
+
+### Applying Animation to Model
+
+```java
+public void playAnimation(ModelInstance model, String animationName) {
+    BlueprintAnimation animation = model.getBlueprint().getAnimation(animationName);
+    
+    if (animation == null) {
+        System.err.println("Animation not found: " + animationName);
+        return;
+    }
+    
+    // Apply each bone animator
+    animation.animator().forEach((boneName, animator) -> {
+        ModelBone bone = model.getBone(boneName);
+        if (bone != null) {
+            bone.setAnimator(animator);
+        }
+    });
+    
+    // Execute associated script
+    AnimationModifier modifier = AnimationModifier.DEFAULT;
+    BlueprintScript script = animation.script(modifier);
+    if (script != null) {
+        script.execute();
+    }
+}
+```
+
+### Checking Animation Properties
+
+```java
+BlueprintAnimation animation = blueprint.getAnimation("jump");
+
+// Check if animation has a script
+if (animation.script() != null) {
+    System.out.println("Animation has associated script");
+}
+
+// Check override behavior
+if (animation.override()) {
+    System.out.println("This animation will override others");
+}
+
+// Check bone count
+int boneCount = animation.animator().size();
+System.out.println("Animation affects " + boneCount + " bones");
+```
+
+### Animation Blending Setup
+
+```java
+BlueprintAnimation fromAnim = blueprint.getAnimation("walk");
+BlueprintAnimation toAnim = blueprint.getAnimation("run");
+
+// Create modifier with lerp timing for smooth transition
+AnimationModifier blendModifier = AnimationModifier.builder()
+    .start(10)  // 10 tick blend-in
+    .end(10)    // 10 tick blend-out
+    .type(toAnim.loop())
+    .build();
+
+// Apply with blending
+model.startAnimation(toAnim.name(), blendModifier);
+```
+
+## See Also
+
+- [AnimationModifier](/api/animation-modifier) - Animation playback modifier
+- [AnimationIterator](/api/animation-iterator) - Keyframe iteration
+- [TrackerAnimation](/api/tracker-animation) - Animation configuration for trackers
+- [BlueprintAnimator](/api/blueprint-animator) - Bone-specific animation data

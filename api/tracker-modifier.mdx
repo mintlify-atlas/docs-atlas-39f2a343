@@ -1,0 +1,287 @@
+---
+title: "TrackerModifier"
+description: "Configuration options for tracker behavior"
+---
+
+## Overview
+
+The `TrackerModifier` record class defines configuration options for a `Tracker`. It controls various behaviors such as visibility checks (sight trace), automatic damage animations, and damage tinting effects.
+
+**Package:** `kr.toxicity.model.api.tracker`
+
+**Since:** 1.15.2
+
+## Record Components
+
+### sightTrace
+```java
+boolean sightTrace
+```
+Whether to perform sight tracing for visibility.
+
+When enabled, the model is only visible to players who have line of sight to it.
+
+**Default:** `true`
+
+**JSON Name:** `sight-trace`
+
+### damageAnimation
+```java
+boolean damageAnimation
+```
+Whether to play automatic damage animations when the entity takes damage.
+
+**Default:** `true`
+
+**JSON Name:** `damage-animation`
+
+<Note>
+This only applies to `EntityTracker`. `DummyTracker` does not use this setting.
+</Note>
+
+### damageTint
+```java
+boolean damageTint
+```
+Whether to apply a red tint when the entity is damaged.
+
+**Default:** `true`
+
+**JSON Name:** `damage-tint`
+
+<Note>
+This only applies to `EntityTracker`. `DummyTracker` does not use this setting.
+</Note>
+
+## Constants
+
+### DEFAULT
+```java
+public static final TrackerModifier DEFAULT = new TrackerModifier(true, true, true)
+```
+The default modifier configuration with all features enabled.
+
+## Methods
+
+### builder
+```java
+public static @NotNull Builder builder()
+```
+Creates a new builder initialized with default values.
+
+**Returns:** A new builder
+
+### toBuilder
+```java
+public @NotNull Builder toBuilder()
+```
+Creates a new builder initialized with this modifier's values.
+
+**Returns:** A new builder
+
+## Builder
+
+The `TrackerModifier.Builder` class provides a fluent API for constructing `TrackerModifier` instances.
+
+### sightTrace
+```java
+public @NotNull Builder sightTrace(boolean sightTrace)
+```
+Sets whether to use sight tracing.
+
+**Parameters:**
+- `sightTrace` - `true` to enable sight tracing
+
+**Returns:** This builder
+
+### damageAnimation
+```java
+public @NotNull Builder damageAnimation(boolean damageAnimation)
+```
+Sets whether to enable damage animations.
+
+**Parameters:**
+- `damageAnimation` - `true` to enable damage animations
+
+**Returns:** This builder
+
+### damageTint
+```java
+public @NotNull Builder damageTint(boolean damageTint)
+```
+Sets whether to enable damage tinting.
+
+**Parameters:**
+- `damageTint` - `true` to enable damage tinting
+
+**Returns:** This builder
+
+### build
+```java
+public @NotNull TrackerModifier build()
+```
+Builds the `TrackerModifier`.
+
+**Returns:** The created modifier
+
+## Usage Examples
+
+### Using Default Settings
+
+```java
+import kr.toxicity.model.api.tracker.TrackerModifier;
+
+// Use default (all features enabled)
+TrackerModifier modifier = TrackerModifier.DEFAULT;
+
+// Create tracker with default settings
+Tracker tracker = api.createEntityTracker(entity, "model_name", TrackerModifier.DEFAULT);
+```
+
+### Custom Configuration
+
+```java
+// Build custom modifier
+TrackerModifier modifier = TrackerModifier.builder()
+    .sightTrace(true)           // Enable sight tracing
+    .damageAnimation(false)     // Disable automatic damage animations
+    .damageTint(true)           // Enable damage tinting
+    .build();
+
+Tracker tracker = api.createEntityTracker(entity, "model_name", modifier);
+```
+
+### Modifying Existing Configuration
+
+```java
+// Start from default and modify
+TrackerModifier modifier = TrackerModifier.DEFAULT.toBuilder()
+    .sightTrace(false)  // Disable sight tracing only
+    .build();
+```
+
+### Configuration Profiles
+
+```java
+// Profile for boss entities (always visible)
+public static final TrackerModifier BOSS_MODIFIER = TrackerModifier.builder()
+    .sightTrace(false)          // Always visible, no line-of-sight check
+    .damageAnimation(true)      // Show damage animations
+    .damageTint(true)           // Show damage tint
+    .build();
+
+// Profile for decorative entities
+public static final TrackerModifier DECORATION_MODIFIER = TrackerModifier.builder()
+    .sightTrace(false)          // Always visible
+    .damageAnimation(false)     // No damage animations
+    .damageTint(false)          // No damage tint
+    .build();
+
+// Profile for stealth entities
+public static final TrackerModifier STEALTH_MODIFIER = TrackerModifier.builder()
+    .sightTrace(true)           // Requires line of sight
+    .damageAnimation(true)      // Show damage animations
+    .damageTint(false)          // Hide damage tint (harder to spot when hit)
+    .build();
+```
+
+### JSON Serialization
+
+```java
+// TrackerModifier supports Gson serialization
+Gson gson = new Gson();
+
+// Serialize to JSON
+TrackerModifier modifier = TrackerModifier.DEFAULT;
+String json = gson.toJson(modifier);
+// {"sight-trace":true,"damage-animation":true,"damage-tint":true}
+
+// Deserialize from JSON
+String json = "{\"sight-trace\":false,\"damage-animation\":true,\"damage-tint\":true}";
+TrackerModifier modifier = gson.fromJson(json, TrackerModifier.class);
+```
+
+### Configuration Files
+
+```yaml
+# config.yml example
+entity-models:
+  zombie:
+    model: "custom_zombie"
+    modifier:
+      sight-trace: true
+      damage-animation: true
+      damage-tint: true
+  
+  boss:
+    model: "boss_model"
+    modifier:
+      sight-trace: false  # Always visible
+      damage-animation: true
+      damage-tint: true
+```
+
+```java
+// Loading from configuration
+public TrackerModifier loadModifier(ConfigurationSection config) {
+    return TrackerModifier.builder()
+        .sightTrace(config.getBoolean("sight-trace", true))
+        .damageAnimation(config.getBoolean("damage-animation", true))
+        .damageTint(config.getBoolean("damage-tint", true))
+        .build();
+}
+```
+
+## Feature Details
+
+### Sight Trace
+
+When `sightTrace` is enabled:
+- The model checks line of sight from each player's eye location to the model location
+- Players without line of sight will not see the model
+- Useful for realistic visibility (models behind walls are hidden)
+- Has a small performance cost for the raytrace calculation
+
+When disabled:
+- The model is visible to all players within render distance
+- Better performance for models that should always be visible
+- Recommended for bosses, decorations, and important entities
+
+### Damage Animation
+
+When `damageAnimation` is enabled:
+- The tracker automatically plays the "damage" animation when the entity takes damage
+- Falls back to "hurt" animation if "damage" is not available
+- Animation priority can be configured in the animation file
+
+When disabled:
+- No automatic damage animation
+- You can still manually trigger animations with `tracker.animate("damage")`
+- Useful when you want custom damage animation logic
+
+### Damage Tint
+
+When `damageTint` is enabled:
+- The model is tinted red when the entity takes damage
+- Tint color can be customized with `EntityTracker.damageTintValue(int)`
+- Tint duration is 10 tracker ticks (250ms) by default
+- Uses `TrackerUpdateAction.tint()` internally
+
+When disabled:
+- No automatic damage tint
+- You can still manually apply tints with `tracker.update(TrackerUpdateAction.tint(color))`
+- Useful for custom damage indication logic or when tinting conflicts with other effects
+
+## Best Practices
+
+1. **Use Profiles**: Create reusable modifier profiles for different entity types
+2. **Performance**: Disable `sightTrace` for models that should always be visible
+3. **Consistency**: Use the same modifier settings for similar entity types
+4. **Documentation**: Document why you disabled certain features in comments
+5. **Testing**: Test with different settings to find the best balance for your use case
+
+## See Also
+
+- [Tracker](tracker) - Base tracker class that uses this modifier
+- [EntityTracker](entity-tracker) - Entity tracker that uses damage features
+- [DummyTracker](dummy-tracker) - Dummy tracker (doesn't use damage features)

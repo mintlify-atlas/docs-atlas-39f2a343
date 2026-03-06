@@ -1,0 +1,767 @@
+---
+title: Dynamic Boss
+description: Create complex boss entities with multi-phase animations and custom mechanics
+icon: dragon
+---
+
+Build epic boss encounters with custom 3D models, dynamic animations, phase transitions, and interactive mechanics.
+
+## Overview
+
+This example demonstrates:
+- Multi-phase boss system with state transitions
+- Health-based animation changes
+- Custom hitbox interactions
+- Skill system with animations
+- Boss bar integration
+
+## Boss Entity Structure
+
+### Core Boss Class
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.animation.AnimationModifier;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import kr.toxicity.model.api.tracker.TrackerUpdateAction;
+import kr.toxicity.model.api.event.hitbox.HitBoxInteractEvent;
+import kr.toxicity.model.api.nms.HitBoxListener;
+import kr.toxicity.model.api.util.function.BonePredicate;
+import org.bukkit.Location;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Zombie;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class DynamicBoss {
+    
+    private final String bossId;
+    private final EntityTracker tracker;
+    private final LivingEntity entity;
+    private final BossBar bossBar;
+    
+    private BossPhase currentPhase = BossPhase.PHASE_1;
+    private final Map<UUID, Long> lastHitTime = new ConcurrentHashMap<>();
+    private final Set<UUID> playersInRange = ConcurrentHashMap.newKeySet();
+    
+    private double maxHealth;
+    private boolean isEnraged = false;
+    
+    public DynamicBoss(String bossId, Location location, String modelName) {
+        this.bossId = bossId;
+        
+        // Spawn entity
+        this.entity = location.getWorld().spawn(location, Zombie.class, zombie -> {
+            zombie.setCustomName("§c§lDemon Lord");
+            zombie.setCustomNameVisible(false);
+            zombie.setHealth(500);
+            zombie.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH).setBaseValue(500);
+        });
+        
+        this.maxHealth = entity.getMaxHealth();
+        
+        // Create boss bar
+        this.bossBar = org.bukkit.Bukkit.createBossBar(
+            "§c§lDemon Lord",
+            BarColor.RED,
+            BarStyle.SEGMENTED_10
+        );
+        
+        // Create model
+        this.tracker = BetterModel.model(modelName)
+            .map(renderer -> renderer.getOrCreate(BaseEntity.of(entity)))
+            .orElse(null);
+        
+        if (tracker != null) {
+            setupBoss();
+        }
+    }
+    
+    private void setupBoss() {
+        // Setup hitbox interactions
+        tracker.createHitBox(
+            BaseEntity.of(entity),
+            HitBoxListener.builder()
+                .interact(this::handleHit)
+                .build(),
+            BonePredicate.name("body").or(BonePredicate.name("head"))
+        );
+        
+        // Start phase 1 animation
+        enterPhase(BossPhase.PHASE_1);
+        
+        // Health monitoring
+        tracker.tick(5, (t, bundler) -> {
+            updateHealth();
+            checkPhaseTransition();
+            updateBossBar();
+        });
+        
+        // Range detection for players
+        tracker.tick(10, (t, bundler) -> {
+            updatePlayersInRange();
+        });
+        
+        // Periodic skills
+        scheduleSkills();
+    }
+    
+    private void handleHit(HitBoxInteractEvent event) {
+        Player player = event.player().player();
+        if (player == null) return;
+        
+        UUID playerId = player.getUniqueId();
+        long currentTime = System.currentTimeMillis();
+        
+        // Cooldown check (500ms)
+        Long lastHit = lastHitTime.get(playerId);
+        if (lastHit != null && currentTime - lastHit < 500) return;
+        
+        lastHitTime.put(playerId, currentTime);
+        
+        // Apply damage
+        entity.damage(10, player);
+        
+        // Play hit reaction
+        if (Math.random() < 0.3) { // 30% chance
+            playSkill(BossSkill.COUNTER_ATTACK);
+        }
+        
+        // Damage animation
+        tracker.damageTint();
+    }
+    
+    private void updateHealth() {
+        double healthPercent = entity.getHealth() / maxHealth;
+        
+        // Check for enrage at 25% health
+        if (healthPercent <= 0.25 && !isEnraged) {
+            enterEnrage();
+        }
+    }
+    
+    private void checkPhaseTransition() {
+        double healthPercent = entity.getHealth() / maxHealth;
+        
+        BossPhase newPhase = null;
+        
+        if (healthPercent <= 0.3 && currentPhase != BossPhase.PHASE_3) {
+            newPhase = BossPhase.PHASE_3;
+        } else if (healthPercent <= 0.6 && currentPhase == BossPhase.PHASE_1) {
+            newPhase = BossPhase.PHASE_2;
+        }
+        
+        if (newPhase != null) {
+            enterPhase(newPhase);
+        }
+    }
+    
+    private void enterPhase(BossPhase phase) {
+        if (currentPhase == phase) return;
+        
+        currentPhase = phase;
+        
+        // Stop current animations
+        tracker.stopAnimation("idle");
+        tracker.stopAnimation("walk");
+        
+        // Play phase transition
+        tracker.animate("phase_transition", AnimationModifier.builder()
+            .type(AnimationIterator.Type.PLAY_ONCE)
+            .build(),
+            () -> {
+                // Start phase idle
+                tracker.animate("phase_" + phase.getId() + "_idle");
+            }
+        );
+        
+        // Visual effects based on phase
+        switch (phase) {
+            case PHASE_1 -> {
+                tracker.update(TrackerUpdateAction.tint(0xFFFFFF));
+                bossBar.setColor(BarColor.RED);
+            }
+            case PHASE_2 -> {
+                tracker.update(TrackerUpdateAction.composite(
+                    TrackerUpdateAction.tint(0xFF8800),
+                    TrackerUpdateAction.glow(true),
+                    TrackerUpdateAction.glowColor(0xFF4400)
+                ));
+                bossBar.setColor(BarColor.YELLOW);
+            }
+            case PHASE_3 -> {
+                tracker.update(TrackerUpdateAction.composite(
+                    TrackerUpdateAction.tint(0xFF0000),
+                    TrackerUpdateAction.glow(true),
+                    TrackerUpdateAction.glowColor(0xFF0000),
+                    TrackerUpdateAction.brightness(15, 15)
+                ));
+                bossBar.setColor(BarColor.RED);
+            }
+        }
+        
+        // Announce phase change
+        playersInRange.forEach(uuid -> {
+            Player player = org.bukkit.Bukkit.getPlayer(uuid);
+            if (player != null) {
+                player.sendMessage("§c§lDemon Lord entered " + phase.getName() + "!");
+            }
+        });
+    }
+    
+    private void enterEnrage() {
+        isEnraged = true;
+        
+        tracker.animate("enrage", AnimationModifier.builder()
+            .type(AnimationIterator.Type.PLAY_ONCE)
+            .build(),
+            () -> {
+                // Faster animations in enraged state
+                tracker.animate(currentPhase.getIdleAnimation(), AnimationModifier.builder()
+                    .speed(1.5F)
+                    .build()
+                );
+            }
+        );
+        
+        // Red pulsing effect
+        tracker.update(TrackerUpdateAction.composite(
+            TrackerUpdateAction.tint(0xFF0000),
+            TrackerUpdateAction.glow(true),
+            TrackerUpdateAction.glowColor(0xFF0000)
+        ));
+        
+        bossBar.setColor(BarColor.RED);
+        bossBar.setTitle("§c§lDemon Lord §f[§4ENRAGED§f]");
+    }
+    
+    private void scheduleSkills() {
+        // Fireball every 5 seconds
+        tracker.tick(100, (t, bundler) -> {
+            if (currentPhase.ordinal() >= BossPhase.PHASE_2.ordinal()) {
+                playSkill(BossSkill.FIREBALL);
+            }
+        });
+        
+        // Ground slam every 8 seconds
+        tracker.tick(160, (t, bundler) -> {
+            playSkill(BossSkill.GROUND_SLAM);
+        });
+        
+        // Summon minions in phase 3
+        tracker.tick(300, (t, bundler) -> {
+            if (currentPhase == BossPhase.PHASE_3) {
+                playSkill(BossSkill.SUMMON_MINIONS);
+            }
+        });
+    }
+    
+    private void playSkill(BossSkill skill) {
+        tracker.animate(skill.getAnimation(), AnimationModifier.builder()
+            .type(AnimationIterator.Type.PLAY_ONCE)
+            .speed(isEnraged ? 1.5F : 1.0F)
+            .build(),
+            () -> {
+                // Return to idle
+                tracker.animate(currentPhase.getIdleAnimation());
+            }
+        );
+        
+        // Execute skill logic
+        skill.execute(this);
+    }
+    
+    private void updatePlayersInRange() {
+        playersInRange.clear();
+        
+        entity.getWorld().getNearbyPlayers(entity.getLocation(), 50)
+            .forEach(player -> {
+                playersInRange.add(player.getUniqueId());
+                bossBar.addPlayer(player);
+            });
+        
+        // Remove players out of range
+        new HashSet<>(bossBar.getPlayers()).forEach(player -> {
+            if (!playersInRange.contains(player.getUniqueId())) {
+                bossBar.removePlayer(player);
+            }
+        });
+    }
+    
+    private void updateBossBar() {
+        double progress = entity.getHealth() / maxHealth;
+        bossBar.setProgress(Math.max(0, Math.min(1, progress)));
+    }
+    
+    public void remove() {
+        if (tracker != null) {
+            tracker.close();
+        }
+        bossBar.removeAll();
+        entity.remove();
+    }
+    
+    public EntityTracker getTracker() {
+        return tracker;
+    }
+    
+    public LivingEntity getEntity() {
+        return entity;
+    }
+    
+    public enum BossPhase {
+        PHASE_1(1, "Phase 1", "phase_1_idle"),
+        PHASE_2(2, "Phase 2", "phase_2_idle"),
+        PHASE_3(3, "Phase 3", "phase_3_idle");
+        
+        private final int id;
+        private final String name;
+        private final String idleAnimation;
+        
+        BossPhase(int id, String name, String idleAnimation) {
+            this.id = id;
+            this.name = name;
+            this.idleAnimation = idleAnimation;
+        }
+        
+        public int getId() { return id; }
+        public String getName() { return name; }
+        public String getIdleAnimation() { return idleAnimation; }
+    }
+    
+    public enum BossSkill {
+        FIREBALL("skill_fireball"),
+        GROUND_SLAM("skill_slam"),
+        COUNTER_ATTACK("skill_counter"),
+        SUMMON_MINIONS("skill_summon");
+        
+        private final String animation;
+        
+        BossSkill(String animation) {
+            this.animation = animation;
+        }
+        
+        public String getAnimation() {
+            return animation;
+        }
+        
+        public void execute(DynamicBoss boss) {
+            // Implement skill logic here
+            switch (this) {
+                case FIREBALL -> boss.executeFireball();
+                case GROUND_SLAM -> boss.executeGroundSlam();
+                case COUNTER_ATTACK -> boss.executeCounter();
+                case SUMMON_MINIONS -> boss.executeSummon();
+            }
+        }
+    }
+    
+    private void executeFireball() {
+        // Launch fireball projectile
+    }
+    
+    private void executeGroundSlam() {
+        // AoE damage around boss
+        entity.getWorld().getNearbyPlayers(entity.getLocation(), 5)
+            .forEach(player -> {
+                player.damage(15);
+                player.setVelocity(player.getLocation().toVector()
+                    .subtract(entity.getLocation().toVector())
+                    .normalize()
+                    .multiply(1.5)
+                    .setY(0.5));
+            });
+    }
+    
+    private void executeCounter() {
+        // Quick counter attack
+    }
+    
+    private void executeSummon() {
+        // Spawn minion entities
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.animation.AnimationModifier
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.tracker.EntityTracker
+import kr.toxicity.model.api.tracker.TrackerUpdateAction
+import kr.toxicity.model.api.event.hitbox.HitBoxInteractEvent
+import kr.toxicity.model.api.nms.HitBoxListener
+import kr.toxicity.model.api.util.function.BonePredicate
+import org.bukkit.Location
+import org.bukkit.boss.BarColor
+import org.bukkit.boss.BarStyle
+import org.bukkit.boss.BossBar
+import org.bukkit.entity.LivingEntity
+import org.bukkit.entity.Player
+import org.bukkit.entity.Zombie
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+
+class DynamicBoss(
+    val bossId: String,
+    location: Location,
+    modelName: String
+) {
+    val tracker: EntityTracker?
+    val entity: LivingEntity
+    private val bossBar: BossBar
+    
+    private var currentPhase = BossPhase.PHASE_1
+    private val lastHitTime = ConcurrentHashMap<UUID, Long>()
+    private val playersInRange = ConcurrentHashMap.newKeySet<UUID>()
+    
+    private val maxHealth: Double
+    private var isEnraged = false
+    
+    init {
+        // Spawn entity
+        entity = location.world.spawn(location, Zombie::class.java) { zombie ->
+            zombie.customName = "§c§lDemon Lord"
+            zombie.isCustomNameVisible = false
+            zombie.health = 500.0
+            zombie.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH)?.baseValue = 500.0
+        }
+        
+        maxHealth = entity.maxHealth
+        
+        // Create boss bar
+        bossBar = org.bukkit.Bukkit.createBossBar(
+            "§c§lDemon Lord",
+            BarColor.RED,
+            BarStyle.SEGMENTED_10
+        )
+        
+        // Create model
+        tracker = BetterModel.model(modelName)
+            .map { it.getOrCreate(BaseEntity.of(entity)) }
+            .orElse(null)
+        
+        tracker?.let { setupBoss() }
+    }
+    
+    private fun setupBoss() {
+        tracker ?: return
+        
+        tracker.createHitBox(
+            BaseEntity.of(entity),
+            HitBoxListener.builder()
+                .interact { handleHit(it) }
+                .build(),
+            BonePredicate.name("body").or(BonePredicate.name("head"))
+        )
+        
+        enterPhase(BossPhase.PHASE_1)
+        
+        tracker.tick(5) { _, _ ->
+            updateHealth()
+            checkPhaseTransition()
+            updateBossBar()
+        }
+        
+        tracker.tick(10) { _, _ ->
+            updatePlayersInRange()
+        }
+        
+        scheduleSkills()
+    }
+    
+    private fun handleHit(event: HitBoxInteractEvent) {
+        val player = event.player().player() ?: return
+        val playerId = player.uniqueId
+        val currentTime = System.currentTimeMillis()
+        
+        val lastHit = lastHitTime[playerId]
+        if (lastHit != null && currentTime - lastHit < 500) return
+        
+        lastHitTime[playerId] = currentTime
+        entity.damage(10.0, player)
+        
+        if (Math.random() < 0.3) {
+            playSkill(BossSkill.COUNTER_ATTACK)
+        }
+        
+        tracker?.damageTint()
+    }
+    
+    private fun updateHealth() {
+        val healthPercent = entity.health / maxHealth
+        
+        if (healthPercent <= 0.25 && !isEnraged) {
+            enterEnrage()
+        }
+    }
+    
+    private fun checkPhaseTransition() {
+        val healthPercent = entity.health / maxHealth
+        
+        val newPhase = when {
+            healthPercent <= 0.3 && currentPhase != BossPhase.PHASE_3 -> BossPhase.PHASE_3
+            healthPercent <= 0.6 && currentPhase == BossPhase.PHASE_1 -> BossPhase.PHASE_2
+            else -> null
+        }
+        
+        newPhase?.let { enterPhase(it) }
+    }
+    
+    private fun enterPhase(phase: BossPhase) {
+        if (currentPhase == phase) return
+        
+        currentPhase = phase
+        tracker?.stopAnimation("idle")
+        tracker?.stopAnimation("walk")
+        
+        tracker?.animate("phase_transition", AnimationModifier.builder()
+            .type(AnimationIterator.Type.PLAY_ONCE)
+            .build()
+        ) {
+            tracker.animate("phase_${phase.id}_idle")
+        }
+        
+        when (phase) {
+            BossPhase.PHASE_1 -> {
+                tracker?.update(TrackerUpdateAction.tint(0xFFFFFF))
+                bossBar.color = BarColor.RED
+            }
+            BossPhase.PHASE_2 -> {
+                tracker?.update(TrackerUpdateAction.composite(
+                    TrackerUpdateAction.tint(0xFF8800),
+                    TrackerUpdateAction.glow(true),
+                    TrackerUpdateAction.glowColor(0xFF4400)
+                ))
+                bossBar.color = BarColor.YELLOW
+            }
+            BossPhase.PHASE_3 -> {
+                tracker?.update(TrackerUpdateAction.composite(
+                    TrackerUpdateAction.tint(0xFF0000),
+                    TrackerUpdateAction.glow(true),
+                    TrackerUpdateAction.glowColor(0xFF0000),
+                    TrackerUpdateAction.brightness(15, 15)
+                ))
+                bossBar.color = BarColor.RED
+            }
+        }
+        
+        playersInRange.forEach { uuid ->
+            org.bukkit.Bukkit.getPlayer(uuid)?.sendMessage(
+                "§c§lDemon Lord entered ${phase.displayName}!"
+            )
+        }
+    }
+    
+    private fun enterEnrage() {
+        isEnraged = true
+        
+        tracker?.animate("enrage", AnimationModifier.builder()
+            .type(AnimationIterator.Type.PLAY_ONCE)
+            .build()
+        ) {
+            tracker.animate(currentPhase.idleAnimation, AnimationModifier.builder()
+                .speed(1.5F)
+                .build()
+            )
+        }
+        
+        tracker?.update(TrackerUpdateAction.composite(
+            TrackerUpdateAction.tint(0xFF0000),
+            TrackerUpdateAction.glow(true),
+            TrackerUpdateAction.glowColor(0xFF0000)
+        ))
+        
+        bossBar.color = BarColor.RED
+        bossBar.setTitle("§c§lDemon Lord §f[§4ENRAGED§f]")
+    }
+    
+    private fun scheduleSkills() {
+        tracker?.tick(100) { _, _ ->
+            if (currentPhase.ordinal >= BossPhase.PHASE_2.ordinal) {
+                playSkill(BossSkill.FIREBALL)
+            }
+        }
+        
+        tracker?.tick(160) { _, _ ->
+            playSkill(BossSkill.GROUND_SLAM)
+        }
+        
+        tracker?.tick(300) { _, _ ->
+            if (currentPhase == BossPhase.PHASE_3) {
+                playSkill(BossSkill.SUMMON_MINIONS)
+            }
+        }
+    }
+    
+    private fun playSkill(skill: BossSkill) {
+        tracker?.animate(skill.animation, AnimationModifier.builder()
+            .type(AnimationIterator.Type.PLAY_ONCE)
+            .speed(if (isEnraged) 1.5F else 1.0F)
+            .build()
+        ) {
+            tracker.animate(currentPhase.idleAnimation)
+        }
+        
+        skill.execute(this)
+    }
+    
+    private fun updatePlayersInRange() {
+        playersInRange.clear()
+        
+        entity.world.getNearbyPlayers(entity.location, 50.0).forEach { player ->
+            playersInRange.add(player.uniqueId)
+            bossBar.addPlayer(player)
+        }
+        
+        HashSet(bossBar.players).forEach { player ->
+            if (!playersInRange.contains(player.uniqueId)) {
+                bossBar.removePlayer(player)
+            }
+        }
+    }
+    
+    private fun updateBossBar() {
+        val progress = entity.health / maxHealth
+        bossBar.progress = progress.coerceIn(0.0, 1.0)
+    }
+    
+    fun remove() {
+        tracker?.close()
+        bossBar.removeAll()
+        entity.remove()
+    }
+    
+    enum class BossPhase(
+        val id: Int,
+        val displayName: String,
+        val idleAnimation: String
+    ) {
+        PHASE_1(1, "Phase 1", "phase_1_idle"),
+        PHASE_2(2, "Phase 2", "phase_2_idle"),
+        PHASE_3(3, "Phase 3", "phase_3_idle")
+    }
+    
+    enum class BossSkill(val animation: String) {
+        FIREBALL("skill_fireball"),
+        GROUND_SLAM("skill_slam"),
+        COUNTER_ATTACK("skill_counter"),
+        SUMMON_MINIONS("skill_summon");
+        
+        fun execute(boss: DynamicBoss) {
+            when (this) {
+                FIREBALL -> boss.executeFireball()
+                GROUND_SLAM -> boss.executeGroundSlam()
+                COUNTER_ATTACK -> boss.executeCounter()
+                SUMMON_MINIONS -> boss.executeSummon()
+            }
+        }
+    }
+    
+    private fun executeFireball() {
+        // Launch fireball projectile
+    }
+    
+    private fun executeGroundSlam() {
+        entity.world.getNearbyPlayers(entity.location, 5.0).forEach { player ->
+            player.damage(15.0)
+            player.velocity = player.location.toVector()
+                .subtract(entity.location.toVector())
+                .normalize()
+                .multiply(1.5)
+                .setY(0.5)
+        }
+    }
+    
+    private fun executeCounter() {
+        // Quick counter attack
+    }
+    
+    private fun executeSummon() {
+        // Spawn minion entities
+    }
+}
+```
+</CodeGroup>
+
+## Boss Manager
+
+### Managing Multiple Bosses
+
+```java
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class BossManager {
+    
+    private final Map<String, DynamicBoss> bosses = new ConcurrentHashMap<>();
+    
+    public DynamicBoss spawnBoss(String id, Location location, String modelName) {
+        // Remove existing boss with same ID
+        removeBoss(id);
+        
+        DynamicBoss boss = new DynamicBoss(id, location, modelName);
+        bosses.put(id, boss);
+        
+        return boss;
+    }
+    
+    public void removeBoss(String id) {
+        DynamicBoss boss = bosses.remove(id);
+        if (boss != null) {
+            boss.remove();
+        }
+    }
+    
+    public DynamicBoss getBoss(String id) {
+        return bosses.get(id);
+    }
+    
+    public void removeAllBosses() {
+        bosses.values().forEach(DynamicBoss::remove);
+        bosses.clear();
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+  - Use phase-based animations to keep boss fights dynamic
+  - Implement cooldowns on hitbox interactions to prevent spam
+  - Update boss bars regularly for real-time health feedback
+  - Use TrackerUpdateAction.composite() for complex visual effects
+  - Cache player references for performance
+</Tip>
+
+<Warning>
+  - Always remove boss bars when boss is defeated
+  - Close trackers properly to prevent memory leaks
+  - Test phase transitions thoroughly
+  - Limit the number of simultaneous skill animations
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Events" icon="bolt" href="/examples/custom-events">
+    Learn more about hitbox events
+  </Card>
+  <Card title="Multi-part Entities" icon="puzzle-piece" href="/examples/multi-part-entities">
+    Create bosses with multiple body parts
+  </Card>
+  <Card title="Conditional Animations" icon="code-branch" href="/examples/conditional-animations">
+    Advanced animation state machines
+  </Card>
+  <Card title="Performance Optimization" icon="gauge-high" href="/examples/performance-optimization">
+    Optimize boss performance
+  </Card>
+</CardGroup>

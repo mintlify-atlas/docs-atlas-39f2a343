@@ -1,0 +1,365 @@
+---
+title: BaseEntity
+description: Core entity adapter interface providing access to entity data and model tracking
+---
+
+## Overview
+
+`BaseEntity` is the primary entity adapter interface in BetterModel. It provides a unified way to access entity properties, manage custom models, and interact with the entity tracking system. This interface acts as a bridge between platform-specific entities and BetterModel's internal entity management.
+
+**Package:** `kr.toxicity.model.api.entity`
+
+**Extends:** `Identifiable`
+
+## Factory Method
+
+### of()
+
+```java
+static @NotNull BaseEntity of(@NotNull PlatformEntity entity)
+```
+
+Creates a `BaseEntity` adapter from a platform-specific entity.
+
+**Parameters:**
+- `entity` - Platform entity to adapt
+
+**Returns:** Base entity adapter
+
+**Example:**
+```java
+PlatformEntity platformEntity = ...; // Get from platform
+BaseEntity base = BaseEntity.of(platformEntity);
+```
+
+## Core Methods
+
+### platform()
+
+```java
+@NotNull PlatformEntity platform()
+```
+
+Gets the underlying platform-specific entity object.
+
+**Returns:** The platform entity
+
+**Since:** 2.0.0
+
+### location()
+
+```java
+default @NotNull PlatformLocation location()
+```
+
+Gets the current location of the entity.
+
+**Returns:** The entity's location
+
+**Since:** 2.0.0
+
+### handle()
+
+```java
+@NotNull Object handle()
+```
+
+Gets the vanilla (NMS) entity handle.
+
+**Returns:** Vanilla entity object
+
+### id()
+
+```java
+int id()
+```
+
+Gets the entity's network ID.
+
+**Returns:** Entity ID
+
+## State Queries
+
+### dead()
+
+```java
+boolean dead()
+```
+
+Checks if the entity is dead.
+
+**Returns:** `true` if dead
+
+### ground()
+
+```java
+boolean ground()
+```
+
+Checks if the entity is on the ground.
+
+**Returns:** `true` if on ground
+
+### invisible()
+
+```java
+boolean invisible()
+```
+
+Checks if the entity has the invisible effect.
+
+**Returns:** `true` if invisible
+
+### glow()
+
+```java
+boolean glow()
+```
+
+Checks if the entity has the glowing effect.
+
+**Returns:** `true` if glowing
+
+### onWalk()
+
+```java
+boolean onWalk()
+```
+
+Checks if the entity is currently walking.
+
+**Returns:** `true` if walking
+
+### fly()
+
+```java
+boolean fly()
+```
+
+Checks if the entity is flying.
+
+**Returns:** `true` if flying
+
+## Appearance Properties
+
+### customName()
+
+```java
+@Nullable Component customName()
+```
+
+Gets the entity's custom name component.
+
+**Returns:** Custom name, or `null` if none
+
+### scale()
+
+```java
+double scale()
+```
+
+Gets the entity's scale multiplier.
+
+**Returns:** Scale value
+
+## Rotation Properties
+
+### pitch()
+
+```java
+float pitch()
+```
+
+Gets the entity's pitch (x-rotation).
+
+**Returns:** Pitch in degrees
+
+### yaw()
+
+```java
+float yaw()
+```
+
+Gets the entity's yaw (y-rotation).
+
+**Returns:** Yaw in degrees
+
+### bodyYaw()
+
+```java
+float bodyYaw()
+```
+
+Gets the entity's body yaw (y-rotation).
+
+**Returns:** Body yaw in degrees
+
+### headYaw()
+
+```java
+float headYaw()
+```
+
+Gets the entity's head yaw (y-rotation).
+
+**Returns:** Head yaw in degrees
+
+## Movement Properties
+
+### walkSpeed()
+
+```java
+float walkSpeed()
+```
+
+Gets the entity's walk speed.
+
+**Returns:** Walk speed value
+
+### damageTick()
+
+```java
+float damageTick()
+```
+
+Gets the entity's damage animation tick.
+
+**Returns:** Damage tick value
+
+### passengerPosition()
+
+```java
+@NotNull Vector3f passengerPosition(@NotNull Vector3f dest)
+```
+
+Calculates the passenger attachment point for this entity.
+
+**Parameters:**
+- `dest` - Destination vector to write result
+
+**Returns:** The destination vector with passenger position
+
+## Equipment
+
+### mainHand()
+
+```java
+@NotNull TransformedItemStack mainHand()
+```
+
+Gets the item in the entity's main hand.
+
+**Returns:** Main hand item stack
+
+### offHand()
+
+```java
+@NotNull TransformedItemStack offHand()
+```
+
+Gets the item in the entity's offhand.
+
+**Returns:** Offhand item stack
+
+## Tracking
+
+### trackedBy()
+
+```java
+@NotNull Stream<PlatformPlayer> trackedBy()
+```
+
+Gets the stream of players currently tracking this entity.
+
+**Returns:** Stream of tracking players
+
+### registry()
+
+```java
+default @NotNull Optional<EntityTrackerRegistry> registry()
+```
+
+Gets the tracker registry associated with this entity.
+
+**Returns:** Optional containing the registry if it exists
+
+### hasControllingPassenger()
+
+```java
+default boolean hasControllingPassenger()
+```
+
+Checks if this entity has a controlling passenger.
+
+**Returns:** `true` if has controlling passenger
+
+## Model Data
+
+### modelData()
+
+```java
+@Nullable String modelData()
+```
+
+Gets this entity's current model data key.
+
+**Returns:** Model data key, or `null` if none
+
+### modelData(String)
+
+```java
+void modelData(@Nullable String modelData)
+```
+
+Sets this entity's model data key.
+
+**Parameters:**
+- `modelData` - Model data key to set, or `null` to clear
+
+### hasModelData()
+
+```java
+default boolean hasModelData()
+```
+
+Checks if this entity has model data assigned.
+
+**Returns:** `true` if model data is present
+
+## Usage Example
+
+```java
+// Get entity and check its state
+PlatformEntity platformEntity = ...; // From platform
+BaseEntity entity = BaseEntity.of(platformEntity);
+
+// Check entity state
+if (!entity.dead() && entity.ground()) {
+    // Entity is alive and on ground
+    float yaw = entity.yaw();
+    PlatformLocation loc = entity.location();
+}
+
+// Assign a custom model
+entity.modelData("custom:warrior");
+
+// Check if entity has tracker registry
+entity.registry().ifPresent(registry -> {
+    // Work with entity trackers
+    registry.tracker("helmet").ifPresent(tracker -> {
+        // Manipulate tracker
+    });
+});
+
+// Get tracked players
+entity.trackedBy().forEach(player -> {
+    // Send updates to tracking players
+});
+```
+
+## Related Types
+
+- [PlatformEntity](/api/platform-entity) - Platform abstraction layer
+- [PlatformLocation](/api/platform-location) - Location representation
+- `EntityTrackerRegistry` - Entity tracker management
+- `TransformedItemStack` - Item stack wrapper

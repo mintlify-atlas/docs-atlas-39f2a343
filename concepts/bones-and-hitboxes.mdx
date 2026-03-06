@@ -1,0 +1,617 @@
+---
+title: "Bones & Hitboxes"
+description: "Working with individual bones and creating interactive hitboxes"
+icon: "skeleton"
+---
+
+## Overview
+
+Bones are the individual components that make up your model. Each bone is rendered as a separate item display entity and can be manipulated independently. Hitboxes enable player interaction with specific bones.
+
+## Understanding Bones
+
+### Bone Hierarchy
+
+Bones are organized in a parent-child tree structure:
+
+```java
+// Get root bone
+RenderedBone root = tracker.bone(bone -> bone.getParent() == null);
+
+// Get bone's parent
+RenderedBone parent = bone.getParent();
+
+// Get bone's children
+RenderedBone[] children = bone.getChildren();
+
+// Get all bones in hierarchy (flattened)
+Collection<RenderedBone> allBones = tracker.bones();
+```
+
+### Bone Names and Tags
+
+Bones are identified by `BoneName`, which includes tags for special functionality:
+
+```java src/main/java/com/example/BoneExample.java
+// Get bone by name
+RenderedBone head = tracker.bone("head");
+
+// Check bone tags
+if (head.name().tagged(BoneTags.HEAD)) {
+    System.out.println("This is a head bone");
+}
+
+// Create bone name with tags
+BoneName taggedName = BoneName.of("head");
+System.out.println("Tags: " + taggedName.tags());
+System.out.println("Name: " + taggedName.name());
+```
+
+**Common Bone Tags:**
+
+<ParamField path="HEAD" type="BoneTag">
+  Marks head bones used for height calculation
+</ParamField>
+
+<ParamField path="HEAD_WITH_CHILDREN" type="BoneTag">
+  Head bone that includes child bones in height calculation
+</ParamField>
+
+<ParamField path="LEFT_ARM" type="BoneTag">
+  Left arm bones
+</ParamField>
+
+<ParamField path="RIGHT_ARM" type="BoneTag">
+  Right arm bones
+</ParamField>
+
+## Bone Manipulation
+
+### Changing Displayed Items
+
+```java src/main/java/com/example/BoneItems.java
+// Change item for a specific bone
+boolean changed = tracker.tryUpdate(
+    (bone, predicate) -> bone.itemStack(
+        b -> b.name().toString().equals("weapon"),
+        TransformedItemStack.of(new ItemStack(Material.DIAMOND_SWORD))
+    ),
+    BonePredicate.name("rightArm")
+);
+
+if (changed) {
+    tracker.forceUpdate(true);  // Force re-render
+}
+```
+
+### Applying Tint/Color
+
+```java
+// Tint bone red (RGB hex)
+tracker.update(
+    (bone, predicate) -> bone.tint(
+        b -> true,
+        0xFF0000  // Red
+    ),
+    BonePredicate.name("body")
+);
+
+// Tint with transparency (ARGB)
+int colorWithAlpha = 0x80FF0000;  // 50% transparent red
+tracker.update(
+    (bone, predicate) -> bone.tint(b -> true, colorWithAlpha),
+    BonePredicate.TRUE
+);
+
+// Reset tint (white)
+tracker.update(
+    (bone, predicate) -> bone.tint(b -> true),
+    BonePredicate.TRUE
+);
+```
+
+### Bone Transformations
+
+```java src/main/java/com/example/BoneTransform.java
+import org.joml.Vector3f;
+import org.joml.Quaternionf;
+
+// Add position offset
+tracker.update(
+    (bone, predicate) -> bone.addPositionModifier(
+        b -> true,
+        pos -> pos.add(new Vector3f(0, 1, 0))  // Move up 1 block
+    ),
+    BonePredicate.name("head")
+);
+
+// Add rotation
+tracker.update(
+    (bone, predicate) -> bone.addRotationModifier(
+        b -> true,
+        rot -> rot.rotateY((float) Math.toRadians(45))  // Rotate 45 degrees
+    ),
+    BonePredicate.name("rightArm")
+);
+
+// Scale bone
+bone.scale(FloatSupplier.of(2.0f));  // 2x size
+```
+
+### Applying Display Properties
+
+```java
+// Apply custom display properties
+tracker.update(
+    (bone, predicate) -> bone.applyAtDisplay(
+        b -> true,
+        display -> {
+            display.invisible(true);  // Hide bone
+            display.glowing(true);    // Make it glow (if supported)
+        }
+    ),
+    BonePredicate.name("wings")
+);
+```
+
+### Adding Enchantment Glint
+
+```java
+// Add enchantment effect to bone
+tracker.update(
+    (bone, predicate) -> bone.enchant(
+        b -> true,
+        true  // Enable enchant glint
+    ),
+    BonePredicate.name("weapon")
+);
+```
+
+## Bone Predicates
+
+Filter bones using `BonePredicate`:
+
+```java
+// By name
+BonePredicate byName = BonePredicate.name("head");
+
+// By tag
+BonePredicate byTag = BonePredicate.tag(BoneTags.HEAD);
+
+// All bones
+BonePredicate all = BonePredicate.TRUE;
+
+// Custom predicate
+BonePredicate custom = BonePredicate.from(bone -> 
+    bone.name().toString().startsWith("left")
+);
+
+// Apply to filtered bones
+tracker.update(
+    (bone, predicate) -> bone.tint(b -> true, 0xFF0000),
+    byTag
+);
+```
+
+## Hitboxes
+
+Hitboxes enable player interaction with model parts using invisible entities.
+
+### Creating Hitboxes
+
+```java src/main/java/com/example/HitboxExample.java
+// Create hitbox on a bone
+boolean created = tracker.createHitBox(
+    BaseEntity.of(entity),
+    HitBoxListener.builder()
+        .interact(event -> {
+            System.out.println("Player interacted!");
+            event.player().sendMessage("You clicked the model!");
+        })
+        .build(),
+    BonePredicate.name("head")
+);
+```
+
+### HitBox Listeners
+
+Listen to various hitbox events:
+
+```java src/main/java/com/example/HitboxListeners.java
+HitBoxListener listener = HitBoxListener.builder()
+    // Left/right click
+    .interact(event -> {
+        Player player = event.player();
+        ModelInteractionHand hand = event.hand();
+        System.out.println(player.getName() + " clicked with " + hand);
+    })
+    // Click at specific position
+    .interactAt(event -> {
+        Vector3f position = event.position();
+        System.out.println("Clicked at: " + position);
+    })
+    // Damage/attack
+    .damage(event -> {
+        Player attacker = event.player();
+        System.out.println(attacker.getName() + " attacked!");
+        event.cancel();  // Prevent default damage
+    })
+    // Entity mounted hitbox
+    .mount(((hitBox, entity) -> {
+        System.out.println(entity.getName() + " mounted!");
+    }))
+    // Entity dismounted
+    .dismount((hitBox, entity) -> {
+        System.out.println(entity.getName() + " dismounted!");
+    })
+    // Hitbox created
+    .create(hitBox -> {
+        System.out.println("Hitbox created for: " + hitBox.groupName());
+    })
+    // Hitbox removed
+    .remove(hitBox -> {
+        System.out.println("Hitbox removed");
+    })
+    // Called every tick
+    .sync(hitBox -> {
+        // Update hitbox state
+    })
+    .build();
+
+// Create hitbox with listener
+tracker.createHitBox(
+    BaseEntity.of(entity),
+    listener,
+    BonePredicate.name("body")
+);
+```
+
+### Hitbox Events
+
+Listen to specific event types:
+
+```java src/main/java/com/example/HitboxEvents.java
+HitBoxListener listener = HitBoxListener.builder()
+    .listen(HitBoxInteractEvent.class, event -> {
+        System.out.println("Interact event");
+    })
+    .listen(HitBoxDamagedEvent.class, event -> {
+        double damage = event.damage();
+        System.out.println("Damaged: " + damage);
+        
+        // Cancel event
+        if (damage > 10) {
+            event.cancel();
+        }
+    })
+    .listen(HitBoxMountEvent.class, event -> {
+        PlatformEntity rider = event.entity();
+        System.out.println("Entity mounted: " + rider.name());
+    })
+    .build();
+```
+
+### Getting Hitboxes
+
+```java
+// Get hitbox from bone
+RenderedBone bone = tracker.bone("head");
+HitBox hitBox = bone.getHitBox();
+
+if (hitBox != null) {
+    System.out.println("Hitbox exists");
+    System.out.println("Source: " + hitBox.source().name());
+    System.out.println("Position: " + hitBox.relativePosition());
+}
+
+// Get or create hitbox
+HitBox hitBox = tracker.hitbox(
+    BaseEntity.of(entity),
+    listener,
+    bone -> bone.name().toString().equals("head")
+);
+```
+
+### Hitbox Properties
+
+```java
+HitBox hitBox = bone.getHitBox();
+
+if (hitBox != null) {
+    // Get position source bone
+    RenderedBone bone = hitBox.positionSource();
+    
+    // Get relative position
+    Vector3f position = hitBox.relativePosition();
+    
+    // Get bone name
+    BoneName name = hitBox.groupName();
+    
+    // Get source entity
+    PlatformEntity source = hitBox.source();
+    
+    // Get mount controller
+    MountController controller = hitBox.mountController();
+    
+    // Check if being controlled
+    if (hitBox.hasBeenControlled()) {
+        System.out.println("Hitbox is being ridden");
+    }
+}
+```
+
+### Hitbox Mounting
+
+Allow entities to ride hitboxes:
+
+```java src/main/java/com/example/MountableHitbox.java
+// Create mountable hitbox
+HitBoxListener listener = HitBoxListener.builder()
+    .mount((hitBox, rider) -> {
+        System.out.println(rider.name() + " mounted!");
+        // Custom mount logic
+    })
+    .dismount((hitBox, rider) -> {
+        System.out.println(rider.name() + " dismounted!");
+    })
+    .build();
+
+tracker.createHitBox(
+    BaseEntity.of(entity),
+    listener,
+    BonePredicate.name("seat")
+);
+
+// Mount entity to hitbox
+HitBox hitBox = tracker.bone("seat").getHitBox();
+if (hitBox != null) {
+    hitBox.mount(PlatformEntity.of(player));
+    
+    // Check if mounted
+    if (hitBox.hasMountDriver()) {
+        System.out.println("Player is mounted");
+    }
+    
+    // Dismount
+    hitBox.dismount(PlatformEntity.of(player));
+    
+    // Dismount all
+    hitBox.dismountAll();
+}
+```
+
+### Hitbox Visibility
+
+```java
+// Hide hitbox from player
+hitBox.hide(player);
+
+// Show hitbox to player
+hitBox.show(player);
+```
+
+### Removing Hitboxes
+
+```java
+// Remove hitbox safely
+HitBox hitBox = bone.getHitBox();
+if (hitBox != null) {
+    hitBox.removeHitBox();
+}
+```
+
+## Advanced: Listener Hooks
+
+Register global hitbox listeners on tracker:
+
+```java src/main/java/com/example/GlobalHitboxListener.java
+// Listen to hitbox creation
+tracker.listenHitBox((bone, builder) -> {
+    // Modify builder before hitbox is created
+    return builder
+        .interact(event -> {
+            System.out.println("Any hitbox clicked!");
+        })
+        .damage(event -> {
+            event.cancel();  // Make all hitboxes invulnerable
+        });
+});
+
+// Listen to specific event type
+tracker.listenHitBox(HitBoxInteractEvent.class, event -> {
+    System.out.println("Hitbox clicked: " + event.getHitBox().groupName());
+});
+```
+
+## Bone Positions
+
+Get world positions of bones:
+
+```java
+import org.joml.Vector3f;
+
+// Get world position
+Vector3f position = bone.worldPosition();
+System.out.println("Bone at: " + position);
+
+// Get world rotation
+Vector3f rotation = bone.worldRotation();
+System.out.println("Bone rotation: " + rotation);
+
+// Get hitbox position
+Vector3f hitBoxPos = bone.hitBoxPosition();
+System.out.println("Hitbox at: " + hitBoxPos);
+
+// Get hitbox scale
+float scale = bone.hitBoxScale();
+System.out.println("Hitbox scale: " + scale);
+```
+
+## Nametags
+
+Add nametags to bones:
+
+```java src/main/java/com/example/Nametag.java
+// Create nametag
+boolean created = tracker.createNametag(
+    BonePredicate.name("head"),
+    (bone, nametag) -> {
+        nametag.text("Boss Name");
+        nametag.visible(true);
+        
+        // Update position every tick
+        tracker.perPlayerTick((t, player) -> {
+            nametag.teleport(t.location());
+            nametag.send(player);
+        });
+    }
+);
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use predicates for bulk operations" icon="filter">
+    Apply changes to multiple bones efficiently:
+    
+    ```java
+    // Good: single update for all arm bones
+    tracker.update(
+        (bone, predicate) -> bone.tint(b -> true, 0xFF0000),
+        BonePredicate.from(b -> 
+            b.name().tagged(BoneTags.LEFT_ARM, BoneTags.RIGHT_ARM)
+        )
+    );
+    ```
+  </Accordion>
+  
+  <Accordion title="Cache bone references" icon="database">
+    Don't look up bones repeatedly:
+    
+    ```java
+    // Cache bone reference
+    private final RenderedBone headBone = tracker.bone("head");
+    
+    public void updateHead() {
+        if (headBone != null) {
+            headBone.tint(b -> true, 0xFF0000);
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use forceUpdate after modifications" icon="rotate">
+    Ensure changes are visible:
+    
+    ```java
+    tracker.update(
+        (bone, predicate) -> bone.tint(b -> true, 0xFF0000),
+        BonePredicate.TRUE
+    );
+    tracker.forceUpdate(true);  // Force re-render
+    ```
+  </Accordion>
+  
+  <Accordion title="Clean up hitboxes properly" icon="trash">
+    Remove hitboxes when no longer needed:
+    
+    ```java
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        BetterModel.registry(event.getEntity().getUniqueId())
+            .ifPresent(registry -> {
+                registry.allTrackers().forEach(tracker -> {
+                    tracker.bones().forEach(bone -> {
+                        HitBox hitBox = bone.getHitBox();
+                        if (hitBox != null) {
+                            hitBox.removeHitBox();
+                        }
+                    });
+                });
+            });
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Complete Example
+
+```java src/main/java/com/example/InteractiveNPC.java
+public class InteractiveNPC {
+    private final EntityTracker tracker;
+    
+    public InteractiveNPC(EntityTracker tracker, Entity entity) {
+        this.tracker = tracker;
+        
+        // Make head interactive
+        tracker.createHitBox(
+            BaseEntity.of(entity),
+            HitBoxListener.builder()
+                .interact(event -> {
+                    event.player().sendMessage("You clicked my head!");
+                    playHeadAnimation();
+                })
+                .build(),
+            BonePredicate.tag(BoneTags.HEAD)
+        );
+        
+        // Make body damageable
+        tracker.createHitBox(
+            BaseEntity.of(entity),
+            HitBoxListener.builder()
+                .damage(event -> {
+                    event.player().sendMessage("Ouch!");
+                    flashRed();
+                })
+                .build(),
+            BonePredicate.name("body")
+        );
+        
+        // Display weapon in right hand
+        tracker.update(
+            (bone, predicate) -> bone.itemStack(
+                b -> true,
+                TransformedItemStack.of(new ItemStack(Material.DIAMOND_SWORD))
+            ),
+            BonePredicate.name("rightArm")
+        );
+    }
+    
+    private void playHeadAnimation() {
+        tracker.animate("nod", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+    }
+    
+    private void flashRed() {
+        // Flash red for 10 ticks
+        tracker.update(
+            (bone, predicate) -> bone.tint(b -> true, 0xFF0000),
+            BonePredicate.TRUE
+        );
+        
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            // Reset tint
+            tracker.update(
+                (bone, predicate) -> bone.tint(b -> true),
+                BonePredicate.TRUE
+            );
+        }, 10);
+    }
+}
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Trackers" icon="crosshairs" href="/concepts/trackers">
+    Managing tracker lifecycle
+  </Card>
+  <Card title="Animations" icon="film" href="/concepts/animations">
+    Per-bone animation control
+  </Card>
+  <Card title="Custom Events" icon="bolt" href="/examples/custom-events">
+    Responding to hitbox events
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/rendered-bone">
+    Complete RenderedBone API
+  </Card>
+</CardGroup>

@@ -1,0 +1,283 @@
+---
+title: ModelRenderer
+description: Blueprint renderer interface for creating and managing model trackers
+---
+
+## Overview
+
+The `ModelRenderer` record represents a blueprint renderer that manages the lifecycle of rendered models. It provides methods to create trackers for both location-based (dummy) and entity-based rendering, with support for model profiles and customization.
+
+## Record Components
+
+| Component | Type | Description |
+|-----------|------|-------------|
+| `name` | `String` | The name of the renderer |
+| `type` | `Type` | The renderer type (GENERAL or PLAYER) |
+| `rendererGroups` | `SequencedMap<BoneName, RendererGroup>` | Map of bone groups in the renderer |
+| `animations` | `Map<String, BlueprintAnimation>` | Available animations by name |
+
+## Query Methods
+
+### groupByTree
+
+```java
+public @Nullable RendererGroup groupByTree(@NotNull BoneName name)
+```
+
+Retrieves a renderer group by traversing the bone tree.
+
+**Parameters:**
+- `name` - The bone name to search for
+
+**Returns:** The matching renderer group, or null if not found
+
+### flatten
+
+```java
+public @NotNull Stream<RendererGroup> flatten()
+```
+
+Returns a flattened stream of all renderer groups in the hierarchy.
+
+**Returns:** Stream of all renderer groups
+
+### animation
+
+```java
+public @NotNull Optional<BlueprintAnimation> animation(@NotNull String name)
+```
+
+Retrieves a blueprint animation by name.
+
+**Parameters:**
+- `name` - The animation name
+
+**Returns:** Optional containing the animation if found
+
+## Creating Location-Based Trackers
+
+### Basic Creation
+
+```java
+public @NotNull DummyTracker create(@NotNull PlatformLocation location)
+public @NotNull DummyTracker create(@NotNull PlatformLocation location, @NotNull TrackerModifier modifier)
+public @NotNull DummyTracker create(@NotNull PlatformLocation location, @NotNull TrackerModifier modifier, @NotNull Consumer<DummyTracker> preUpdateConsumer)
+```
+
+Creates a dummy tracker at a specific location without entity attachment.
+
+**Parameters:**
+- `location` - The world location for the model
+- `modifier` - (Optional) Modifier for tracker behavior, defaults to `TrackerModifier.DEFAULT`
+- `preUpdateConsumer` - (Optional) Consumer executed before each update tick
+
+**Returns:** A new `DummyTracker` instance
+
+**Example:**
+```java
+ModelRenderer renderer = BetterModel.inst().blueprint("my_model").renderer();
+PlatformLocation location = player.location();
+
+// Basic creation
+DummyTracker tracker = renderer.create(location);
+
+// With modifier
+TrackerModifier modifier = TrackerModifier.builder()
+    .autoPlay(true)
+    .build();
+DummyTracker trackerWithModifier = renderer.create(location, modifier);
+
+// With pre-update callback
+DummyTracker trackerWithCallback = renderer.create(location, modifier, t -> {
+    // Custom logic before each update
+    t.teleport(newLocation);
+});
+```
+
+### With Model Profile
+
+```java
+public @NotNull DummyTracker create(@NotNull PlatformLocation location, @NotNull ModelProfile profile)
+public @NotNull DummyTracker create(@NotNull PlatformLocation location, @NotNull ModelProfile profile, @NotNull TrackerModifier modifier)
+public @NotNull DummyTracker create(@NotNull PlatformLocation location, @NotNull ModelProfile profile, @NotNull TrackerModifier modifier, @NotNull Consumer<DummyTracker> preUpdateConsumer)
+```
+
+Creates a dummy tracker with a specific model profile (skin/texture).
+
+**Parameters:**
+- `location` - The world location
+- `profile` - The model profile or its uncompleted variant
+- `modifier` - (Optional) Tracker modifier
+- `preUpdateConsumer` - (Optional) Pre-update callback
+
+**Example:**
+```java
+ModelProfile profile = ModelProfile.of("eyJ0ZXh0dXJlcyI...");
+DummyTracker tracker = renderer.create(location, profile);
+
+// With uncompleted profile
+ModelProfile.Uncompleted uncompleted = profile.asUncompleted();
+DummyTracker tracker2 = renderer.create(location, uncompleted, modifier);
+```
+
+## Creating Entity-Based Trackers
+
+### Basic Entity Trackers
+
+```java
+public @NotNull EntityTracker create(@NotNull PlatformEntity entity)
+public @NotNull EntityTracker create(@NotNull PlatformEntity entity, @NotNull TrackerModifier modifier)
+public @NotNull EntityTracker create(@NotNull PlatformEntity entity, @NotNull TrackerModifier modifier, @NotNull Consumer<EntityTracker> preUpdateConsumer)
+```
+
+Creates a tracker attached to an entity. The model will follow the entity's position and rotation.
+
+**Parameters:**
+- `entity` - The platform entity or BaseEntity to attach to
+- `modifier` - (Optional) Tracker modifier
+- `preUpdateConsumer` - (Optional) Pre-update callback
+
+**Returns:** A new `EntityTracker` instance
+
+**Example:**
+```java
+PlatformEntity entity = player.asPlatformEntity();
+EntityTracker tracker = renderer.create(entity);
+
+// With modifier and callback
+EntityTracker tracker2 = renderer.create(entity, modifier, t -> {
+    // Update animations based on entity state
+    if (entity.isSneaking()) {
+        t.play("sneak");
+    }
+});
+```
+
+### Entity Trackers with Profile
+
+```java
+public @NotNull EntityTracker create(@NotNull PlatformEntity entity, @NotNull ModelProfile.Uncompleted profile)
+public @NotNull EntityTracker create(@NotNull PlatformEntity entity, @NotNull ModelProfile.Uncompleted profile, @NotNull TrackerModifier modifier)
+public @NotNull EntityTracker create(@NotNull PlatformEntity entity, @NotNull ModelProfile.Uncompleted profile, @NotNull TrackerModifier modifier, @NotNull Consumer<EntityTracker> preUpdateConsumer)
+```
+
+Creates an entity tracker with a specific model profile.
+
+**Example:**
+```java
+ModelProfile.Uncompleted profile = ModelProfile.of("custom_skin").asUncompleted();
+EntityTracker tracker = renderer.create(entity, profile, modifier);
+```
+
+### Get or Create Pattern
+
+```java
+public @NotNull EntityTracker getOrCreate(@NotNull PlatformEntity entity)
+public @NotNull EntityTracker getOrCreate(@NotNull PlatformEntity entity, @NotNull TrackerModifier modifier)
+public @NotNull EntityTracker getOrCreate(@NotNull PlatformEntity entity, @NotNull ModelProfile profile)
+// ... additional overloads with profile and modifier combinations
+```
+
+Retrieves an existing tracker for the entity, or creates a new one if none exists. Useful for ensuring only one tracker per entity.
+
+**Returns:** Existing or newly created `EntityTracker`
+
+**Example:**
+```java
+// First call creates tracker
+EntityTracker tracker1 = renderer.getOrCreate(entity);
+
+// Second call returns the same tracker
+EntityTracker tracker2 = renderer.getOrCreate(entity);
+assert tracker1 == tracker2; // true
+```
+
+## BaseEntity Variants
+
+All `PlatformEntity` methods have corresponding `BaseEntity` variants:
+
+```java
+public @NotNull EntityTracker create(@NotNull BaseEntity entity)
+public @NotNull EntityTracker create(@NotNull BaseEntity entity, @NotNull TrackerModifier modifier)
+public @NotNull EntityTracker getOrCreate(@NotNull BaseEntity entity)
+// ... additional overloads
+```
+
+These methods work identically but accept `BaseEntity` instead of `PlatformEntity`.
+
+**Example:**
+```java
+BaseEntity baseEntity = BaseEntity.of(platformEntity);
+EntityTracker tracker = renderer.create(baseEntity, modifier);
+```
+
+## Renderer Type
+
+```java
+public enum Type {
+    GENERAL(true),
+    PLAYER(false);
+    
+    public boolean canBeSaved();
+}
+```
+
+Defines the renderer type:
+
+- **GENERAL** - Standard models that can be saved
+- **PLAYER** - Player-specific models that cannot be saved
+
+**Access:**
+```java
+ModelRenderer renderer = blueprint.renderer();
+ModelRenderer.Type type = renderer.type();
+boolean saveable = type.canBeSaved();
+```
+
+## Complete Example
+
+```java
+// Get renderer from blueprint
+Blueprint blueprint = BetterModel.inst().blueprint("warrior");
+ModelRenderer renderer = blueprint.renderer();
+
+// Create location-based tracker with profile
+PlatformLocation spawnLocation = world.getSpawnLocation();
+ModelProfile profile = ModelProfile.of("custom_texture");
+TrackerModifier modifier = TrackerModifier.builder()
+    .autoPlay(true)
+    .defaultAnimation("idle")
+    .build();
+
+DummyTracker dummyTracker = renderer.create(
+    spawnLocation, 
+    profile, 
+    modifier,
+    tracker -> {
+        // Pre-update logic
+        tracker.rotate(0, currentYaw, 0);
+    }
+);
+
+// Create entity-based tracker
+PlatformEntity npc = createNPC();
+EntityTracker entityTracker = renderer.getOrCreate(npc, modifier);
+
+// Query animations
+renderer.animation("attack").ifPresent(anim -> {
+    entityTracker.play("attack");
+});
+
+// Query bone groups
+RendererGroup headGroup = renderer.groupByTree(BoneName.of("head"));
+if (headGroup != null) {
+    // Manipulate head group
+}
+```
+
+## See Also
+
+- [RenderPipeline](/api/render-pipeline) - The rendering pipeline created by trackers
+- [RenderSource](/api/render-source) - Source abstraction for rendering context
+- [Tracker](/api/tracker) - Base tracker interface
+- [Blueprint](/api/blueprint) - Blueprint that contains the renderer

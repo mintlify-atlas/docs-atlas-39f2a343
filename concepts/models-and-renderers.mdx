@@ -1,0 +1,383 @@
+---
+title: "Models & Renderers"
+description: "Understanding ModelRenderer and how to load and spawn models"
+icon: "cube"
+---
+
+## Overview
+
+The `ModelRenderer` is the entry point for spawning and managing model instances in BetterModel. It represents a loaded model definition (typically from a `.bbmodel` file) and provides methods to create trackers that render the model in the world.
+
+## Model Structure
+
+A `ModelRenderer` contains:
+
+- **Name** - Unique identifier for the model
+- **Type** - Either `GENERAL` or `PLAYER`
+- **Renderer Groups** - Hierarchical bone structure with display entities
+- **Animations** - Named animation definitions
+
+### Renderer Types
+
+<Tabs>
+  <Tab title="GENERAL">
+    General models can be attached to any entity or location. They support saving/serialization.
+    
+    ```java
+    ModelRenderer renderer = BetterModel.platform()
+        .modelManager()
+        .getRenderer("my_model")
+        .orElseThrow();
+    
+    // Type.GENERAL allows saving
+    if (renderer.type().canBeSaved()) {
+        // Can serialize tracker state
+    }
+    ```
+  </Tab>
+  
+  <Tab title="PLAYER">
+    Player models are specialized for player entities and handle skin textures. They cannot be saved.
+    
+    ```java
+    ModelRenderer playerModel = BetterModel.platform()
+        .modelManager()
+        .getPlayerRenderer("custom_player")
+        .orElseThrow();
+    
+    // Create with player profile for skin support
+    EntityTracker tracker = playerModel.create(
+        BaseEntity.of(player),
+        profile
+    );
+    ```
+  </Tab>
+</Tabs>
+
+## Loading Models
+
+Models are automatically discovered from the `BetterModel/models/` and `BetterModel/players/` directories.
+
+### Model Discovery
+
+```java
+// Get the model manager
+ModelManager manager = BetterModel.platform().modelManager();
+
+// Retrieve a general model
+Optional<ModelRenderer> renderer = manager.getRenderer("zombie_boss");
+
+// Retrieve a player model
+Optional<ModelRenderer> playerRenderer = manager.getPlayerRenderer("custom_skin");
+
+// Get all loaded models
+Collection<ModelRenderer> allModels = manager.allRenderer();
+```
+
+<Info>
+  Model names are derived from the `.bbmodel` filename without the extension.
+</Info>
+
+## Creating Trackers
+
+The `ModelRenderer` provides multiple `create()` methods for spawning model instances.
+
+### Entity Trackers
+
+Attach a model to an entity:
+
+```java src/main/java/com/example/EntityModelExample.java
+ModelRenderer renderer = BetterModel.platform()
+    .modelManager()
+    .getRenderer("dragon_mount")
+    .orElseThrow();
+
+// Basic entity tracker
+EntityTracker tracker = renderer.create(BaseEntity.of(entity));
+
+// With modifier
+EntityTracker tracker = renderer.create(
+    BaseEntity.of(entity),
+    TrackerModifier.builder()
+        .renderDistance(128)
+        .build()
+);
+
+// With pre-update task
+EntityTracker tracker = renderer.create(
+    BaseEntity.of(entity),
+    TrackerModifier.DEFAULT,
+    t -> {
+        // Runs before each tick
+        if (entity.isDead()) {
+            t.close();
+        }
+    }
+);
+```
+
+### Dummy Trackers
+
+Spawn a standalone model at a location:
+
+```java src/main/java/com/example/DummyModelExample.java
+ModelRenderer renderer = BetterModel.platform()
+    .modelManager()
+    .getRenderer("decoration")
+    .orElseThrow();
+
+// Basic dummy tracker
+DummyTracker tracker = renderer.create(location);
+
+// With modifier
+DummyTracker tracker = renderer.create(
+    location,
+    TrackerModifier.builder()
+        .sightTrace(true)  // Hide behind walls
+        .build()
+);
+```
+
+<Note>
+  Dummy trackers are stationary and don't follow entities. Use them for environmental decorations, holograms, or stationary NPCs.
+</Note>
+
+### Get or Create Pattern
+
+For entity trackers, you can retrieve existing trackers or create new ones:
+
+```java src/main/java/com/example/GetOrCreateExample.java
+// Get existing or create new
+EntityTracker tracker = renderer.getOrCreate(BaseEntity.of(entity));
+
+// Avoids duplicate trackers on the same entity
+if (!tracker.isClosed()) {
+    tracker.animate("idle");
+}
+```
+
+## Working with Animations
+
+Renderers provide access to their animation definitions:
+
+```java
+// Get animation by name
+Optional<BlueprintAnimation> animation = renderer.animation("attack");
+
+animation.ifPresent(anim -> {
+    System.out.println("Duration: " + anim.duration());
+    System.out.println("Loop: " + anim.loop());
+});
+
+// Get all animations
+Map<String, BlueprintAnimation> animations = renderer.animations();
+for (String name : animations.keySet()) {
+    System.out.println("Animation: " + name);
+}
+```
+
+## Renderer Groups
+
+Renderer groups represent the bone hierarchy of the model:
+
+```java
+// Get a specific bone group by name
+RendererGroup group = renderer.groupByTree(BoneName.of("head"));
+
+if (group != null) {
+    System.out.println("Found bone: " + group.name());
+}
+
+// Get all groups as a flat stream
+renderer.flatten().forEach(group -> {
+    System.out.println("Bone: " + group.name());
+});
+```
+
+## Tracker Modifiers
+
+Customize tracker behavior with `TrackerModifier`:
+
+```java src/main/java/com/example/ModifierExample.java
+TrackerModifier modifier = TrackerModifier.builder()
+    .renderDistance(64)        // View distance in blocks
+    .sightTrace(true)          // Hide behind walls
+    .interpolation(true)       // Smooth movement
+    .build();
+
+EntityTracker tracker = renderer.create(
+    BaseEntity.of(entity),
+    modifier
+);
+```
+
+### Modifier Options
+
+<ParamField path="renderDistance" type="int" default="64">
+  Maximum distance in blocks from which players can see the model.
+</ParamField>
+
+<ParamField path="sightTrace" type="boolean" default="false">
+  Whether to hide the model when the player's line of sight is blocked.
+</ParamField>
+
+<ParamField path="interpolation" type="boolean" default="true">
+  Whether to smoothly interpolate entity movement.
+</ParamField>
+
+## Profile Support
+
+For player models or custom textures, use `ModelProfile`:
+
+```java src/main/java/com/example/ProfileExample.java
+// Create profile from player
+ModelProfile profile = ModelProfile.of(player);
+
+// Create tracker with profile
+EntityTracker tracker = renderer.create(
+    BaseEntity.of(entity),
+    profile
+);
+
+// Or use uncompleted profile for async loading
+ModelProfile.Uncompleted uncompleted = profile.asUncompleted();
+EntityTracker tracker = renderer.create(
+    BaseEntity.of(entity),
+    uncompleted
+);
+```
+
+<Info>
+  Profiles handle player skins and custom textures asynchronously. The model will update automatically when the texture loads.
+</Info>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Cache ModelRenderer instances" icon="database">
+    Retrieve renderers once and cache them. Don't look up models on every tracker creation.
+    
+    ```java
+    public class ModelCache {
+        private static final Map<String, ModelRenderer> CACHE = new HashMap<>();
+        
+        public static ModelRenderer get(String name) {
+            return CACHE.computeIfAbsent(name, n -> 
+                BetterModel.platform()
+                    .modelManager()
+                    .getRenderer(n)
+                    .orElse(null)
+            );
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Always check for empty optionals" icon="exclamation-triangle">
+    Model loading can fail. Always handle `Optional.empty()` cases.
+    
+    ```java
+    ModelRenderer renderer = BetterModel.platform()
+        .modelManager()
+        .getRenderer("boss")
+        .orElse(null);
+    
+    if (renderer == null) {
+        player.sendMessage("Model not found!");
+        return;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use getOrCreate for persistent entities" icon="recycle">
+    For entities that may already have trackers, use `getOrCreate()` to avoid duplicates.
+    
+    ```java
+    // Safe: reuses existing tracker if present
+    EntityTracker tracker = renderer.getOrCreate(BaseEntity.of(entity));
+    ```
+  </Accordion>
+  
+  <Accordion title="Clean up trackers properly" icon="trash">
+    Always close trackers when they're no longer needed.
+    
+    ```java
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        EntityTrackerRegistry registry = BetterModel.registry(
+            event.getEntity().getUniqueId()
+        ).orElse(null);
+        
+        if (registry != null) {
+            registry.clear();  // Close all trackers
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Example: Complete Model Spawning
+
+```java src/main/java/com/example/CompleteExample.java
+public class BossSpawner {
+    private final ModelRenderer bossModel;
+    
+    public BossSpawner() {
+        // Cache renderer on initialization
+        this.bossModel = BetterModel.platform()
+            .modelManager()
+            .getRenderer("ender_dragon_boss")
+            .orElseThrow(() -> new IllegalStateException("Boss model not found"));
+    }
+    
+    public void spawnBoss(Location location) {
+        // Spawn entity
+        Zombie entity = location.getWorld().spawn(location, Zombie.class, z -> {
+            z.setAI(true);
+            z.setInvisible(true);
+            z.setHealth(500);
+        });
+        
+        // Create tracker with custom modifier
+        EntityTracker tracker = bossModel.create(
+            BaseEntity.of(entity),
+            TrackerModifier.builder()
+                .renderDistance(128)
+                .build(),
+            t -> {
+                // Pre-update task: check if entity is dead
+                if (entity.isDead() || !entity.isValid()) {
+                    t.close();
+                }
+            }
+        );
+        
+        // Start idle animation
+        tracker.animate("idle");
+        
+        // Register cleanup
+        tracker.handleCloseEvent((t, reason) -> {
+            if (reason == Tracker.CloseReason.REMOVE) {
+                entity.remove();
+            }
+        });
+    }
+}
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Trackers" icon="crosshairs" href="/concepts/trackers">
+    Learn about managing tracker lifecycle
+  </Card>
+  <Card title="Animations" icon="film" href="/concepts/animations">
+    Playing and controlling animations
+  </Card>
+  <Card title="Bones & Hitboxes" icon="skeleton" href="/concepts/bones-and-hitboxes">
+    Working with individual bones
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/model-renderer">
+    Complete ModelRenderer API
+  </Card>
+</CardGroup>

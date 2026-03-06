@@ -1,0 +1,195 @@
+---
+title: PlatformEntity
+description: Platform-agnostic entity interface for accessing entity properties and scheduling tasks
+---
+
+## Overview
+
+`PlatformEntity` represents an entity in the underlying platform (Bukkit, Folia, etc.). It provides a platform-agnostic interface for accessing basic entity properties like UUID and location, as well as integration with BetterModel's entity tracking system.
+
+**Package:** `kr.toxicity.model.api.platform`
+
+**Extends:** `PlatformRegionHolder`
+
+**Since:** 2.0.0
+
+## Core Methods
+
+### uuid()
+
+```java
+@NotNull UUID uuid()
+```
+
+Returns the unique identifier of the entity.
+
+**Returns:** The entity's UUID
+
+**Since:** 2.0.0
+
+### location()
+
+```java
+@NotNull PlatformLocation location()
+```
+
+Returns the current location of the entity.
+
+**Returns:** The location
+
+**Since:** 2.0.0
+
+## Tracking Integration
+
+### registry()
+
+```java
+default @NotNull Optional<EntityTrackerRegistry> registry()
+```
+
+Retrieves the tracker registry associated with this entity.
+
+**Returns:** An optional containing the registry if it exists
+
+**Since:** 2.0.0
+
+**Example:**
+```java
+PlatformEntity entity = ...;
+entity.registry().ifPresent(registry -> {
+    // Access entity's tracker registry
+    int trackerCount = registry.trackers().size();
+});
+```
+
+### tracker()
+
+```java
+default @NotNull Optional<EntityTracker> tracker(@NotNull String name)
+```
+
+Retrieves a specific tracker by name from this entity's registry.
+
+**Parameters:**
+- `name` - The name of the tracker
+
+**Returns:** An optional containing the tracker if found
+
+**Since:** 2.0.0
+
+**Example:**
+```java
+PlatformEntity entity = ...;
+entity.tracker("helmet").ifPresent(tracker -> {
+    // Work with the helmet tracker
+    tracker.visible(true);
+});
+```
+
+## Task Scheduling
+
+Inherited from `PlatformRegionHolder`:
+
+### task()
+
+```java
+default @Nullable ModelTask task(@NotNull Runnable runnable)
+```
+
+Schedules a task to run on the next tick, synchronized with this entity's region.
+
+**Parameters:**
+- `runnable` - The task to run
+
+**Returns:** The scheduled task, or `null` if scheduling failed
+
+**Since:** 2.0.0
+
+<Note>
+On Folia servers, tasks are automatically scheduled on the entity's region thread.
+</Note>
+
+### taskLater()
+
+```java
+default @Nullable ModelTask taskLater(long delay, @NotNull Runnable runnable)
+```
+
+Schedules a task to run after a delay, synchronized with this entity's region.
+
+**Parameters:**
+- `delay` - The delay in ticks
+- `runnable` - The task to run
+
+**Returns:** The scheduled task, or `null` if scheduling failed
+
+**Since:** 2.0.0
+
+## Platform Adapter Usage
+
+Use `BukkitAdapter` to convert Bukkit entities to `PlatformEntity`:
+
+```java
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+import org.bukkit.entity.Entity;
+
+// Convert Bukkit entity
+Entity bukkitEntity = ...; // Get from Bukkit API
+PlatformEntity platformEntity = BukkitAdapter.adapt(bukkitEntity);
+
+// Access platform-agnostic properties
+UUID entityId = platformEntity.uuid();
+PlatformLocation location = platformEntity.location();
+
+// Schedule region-safe task
+platformEntity.task(() -> {
+    // This runs on the correct region thread
+    System.out.println("Entity location: " + location.x() + ", " + location.y());
+});
+```
+
+## Hierarchy
+
+`PlatformEntity` is extended by:
+- `PlatformLivingEntity` - Adds living entity properties (eye location)
+- `PlatformPlayer` - Adds player-specific properties (name, online status)
+
+## Usage Example
+
+```java
+import kr.toxicity.model.api.platform.PlatformEntity;
+import kr.toxicity.model.api.bukkit.platform.BukkitAdapter;
+
+public void handleEntity(org.bukkit.entity.Entity bukkitEntity) {
+    PlatformEntity entity = BukkitAdapter.adapt(bukkitEntity);
+    
+    // Get entity properties
+    UUID id = entity.uuid();
+    PlatformLocation loc = entity.location();
+    
+    // Check for tracker registry
+    entity.registry().ifPresent(registry -> {
+        // Entity has custom models attached
+        System.out.println("Entity has " + registry.trackers().size() + " trackers");
+        
+        // Get specific tracker
+        registry.tracker("weapon").ifPresent(tracker -> {
+            // Manipulate weapon tracker
+            tracker.yaw(45.0f);
+        });
+    });
+    
+    // Schedule a delayed task on the entity's region
+    entity.taskLater(20L, () -> {
+        System.out.println("Entity moved to: " + entity.location());
+    });
+}
+```
+
+## Related Types
+
+- [BaseEntity](/api/base-entity) - Enhanced entity adapter with model data
+- [PlatformLocation](/api/platform-location) - Location representation
+- [PlatformPlayer](/api/platform-player) - Player-specific interface
+- `EntityTrackerRegistry` - Entity tracker management
+- `PlatformRegionHolder` - Region-aware task scheduling

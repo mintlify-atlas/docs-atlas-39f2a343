@@ -1,0 +1,405 @@
+---
+title: "EntityTracker"
+description: "Tracker implementation attached to living entities"
+---
+
+## Overview
+
+The `EntityTracker` class is a `Tracker` implementation that is attached to a living entity. It synchronizes the model's position, rotation, and animations with the target entity, and handles hitboxes, nametags, damage tinting, and mounting mechanics.
+
+**Package:** `kr.toxicity.model.api.tracker`
+
+**Extends:** `Tracker`
+
+**Since:** 1.15.2
+
+## Key Features
+
+- **Entity Synchronization**: Automatically follows the target entity's position and rotation
+- **Damage Effects**: Supports damage tinting and animations
+- **Shadow Rendering**: Automatically manages entity shadows
+- **Head Rotation**: Synchronizes head bone rotation with entity look direction
+- **Mounting**: Supports mounting entities on model bones
+- **Nametag Management**: Automatically displays entity custom names
+- **Persistence**: Can save and restore tracker state
+
+## Constructor
+
+```java
+public EntityTracker(
+    @NotNull EntityTrackerRegistry registry,
+    @NotNull RenderPipeline pipeline,
+    @NotNull TrackerModifier modifier,
+    @NotNull Consumer<EntityTracker> preUpdateConsumer
+)
+```
+
+Creates a new entity tracker.
+
+**Parameters:**
+- `registry` - The entity tracker registry
+- `pipeline` - The render pipeline
+- `modifier` - The tracker modifier
+- `preUpdateConsumer` - A consumer to run before the first update
+
+<Note>
+This constructor is marked `@ApiStatus.Internal` and should not be called directly.
+Use `BetterModelAPI.createEntityTracker()` or similar factory methods instead.
+</Note>
+
+## Methods
+
+### Entity Information
+
+#### sourceEntity
+```java
+public @NotNull BaseEntity sourceEntity()
+```
+Returns the source entity being tracked.
+
+**Returns:** The source entity
+
+#### registry
+```java
+public @NotNull EntityTrackerRegistry registry()
+```
+Returns the entity tracker registry associated with this tracker.
+
+**Returns:** The registry
+
+#### location
+```java
+public @NotNull PlatformLocation location()
+```
+Returns the current location of the model (synchronized with the entity).
+
+**Returns:** The location
+
+### Damage Effects
+
+#### damageTint
+```java
+public void damageTint()
+```
+Triggers the damage tint effect if enabled in the tracker modifier.
+
+The model will be tinted with the damage tint color for a short duration.
+
+#### damageTintValue
+```java
+public int damageTintValue()
+public void damageTintValue(int tint)
+```
+Gets or sets the damage tint color value (RGB hex).
+
+**Default:** `0xFF8080` (light red)
+
+#### cancelDamageTint
+```java
+public void cancelDamageTint()
+```
+Cancels the active damage tint effect immediately.
+
+### Entity Synchronization
+
+#### updateBaseEntity
+```java
+public void updateBaseEntity()
+```
+Synchronizes the tracker with the base entity's data asynchronously.
+
+This updates potion effects, position, and other entity properties on all bones.
+
+#### refresh
+```java
+public void refresh()
+```
+Refreshes the tracker, updating entity data and hitboxes.
+
+<Note>
+This method is marked `@ApiStatus.Internal` and is typically called automatically.
+</Note>
+
+### HitBox Management
+
+#### createHitBox
+```java
+public boolean createHitBox(@Nullable HitBoxListener listener, @NotNull BonePredicate predicate)
+```
+Creates hitboxes for the entity based on a predicate.
+
+**Parameters:**
+- `listener` - Optional hitbox listener for interaction events
+- `predicate` - Bone predicate to filter which bones get hitboxes
+
+**Returns:** `true` if any hitboxes were created
+
+#### hitbox
+```java
+public @Nullable HitBox hitbox(@Nullable HitBoxListener listener, @NotNull Predicate<RenderedBone> predicate)
+```
+Retrieves or creates a hitbox for the entity.
+
+**Parameters:**
+- `listener` - Optional hitbox listener
+- `predicate` - Bone predicate
+
+**Returns:** The hitbox, or `null` if not found/created
+
+### Rotation Control
+
+#### bodyRotator
+```java
+public @NotNull EntityBodyRotator bodyRotator()
+```
+Returns the entity body rotator that controls body and head rotation.
+
+**Returns:** The body rotator
+
+#### rotation
+```java
+public @NotNull ModelRotation rotation()
+```
+Returns the current rotation of the model.
+
+If the entity is dead, returns the pipeline's frozen rotation. Otherwise, returns the calculated rotation from the body rotator.
+
+**Returns:** The model rotation
+
+### Player Spawning Control
+
+#### markPlayerForSpawn
+```java
+public boolean markPlayerForSpawn(@NotNull PlatformPlayer player)
+public boolean markPlayerForSpawn(@NotNull Set<UUID> uuids)
+```
+Marks player(s) for spawning the model.
+
+When marked, the model will only spawn for these specific players.
+
+**Returns:** `true` if any players were added
+
+#### unmarkPlayerForSpawn
+```java
+public boolean unmarkPlayerForSpawn(@NotNull PlatformPlayer player)
+```
+Unmarks a player for spawning the model.
+
+**Returns:** `true` if the player was removed
+
+#### canBeSpawnedAt
+```java
+public boolean canBeSpawnedAt(@NotNull PlatformPlayer player)
+```
+Checks if the model can be spawned for a specific player.
+
+**Returns:** `true` if allowed
+
+### Visibility Options
+
+#### hideOption
+```java
+public @NotNull EntityHideOption hideOption()
+public void hideOption(@NotNull EntityHideOption hideOption)
+```
+Gets or sets the hide option for this tracker.
+
+**Parameters:**
+- `hideOption` - The new hide option controlling when the entity is hidden
+
+### Persistence
+
+#### asTrackerData
+```java
+public @NotNull TrackerData asTrackerData()
+```
+Converts the current tracker state to a `TrackerData` object for persistence.
+
+**Returns:** The tracker data
+
+#### canBeSaved
+```java
+public boolean canBeSaved()
+```
+Checks if this tracker's data can be saved.
+
+**Returns:** `true` if saveable
+
+### Lifecycle
+
+#### despawn
+```java
+public void despawn()
+```
+Despawns the model for all players.
+
+If the source entity is dead, this closes the tracker with `CloseReason.DESPAWN`.
+Otherwise, it calls the parent `despawn()` method.
+
+## Usage Examples
+
+### Creating an Entity Tracker
+
+```java
+import kr.toxicity.model.api.BetterModelAPI;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import kr.toxicity.model.api.tracker.TrackerModifier;
+
+BaseEntity entity = ...; // Your entity wrapper
+
+// Create tracker with default settings
+EntityTracker tracker = BetterModelAPI.getInstance()
+    .createEntityTracker(entity, "model_name", TrackerModifier.DEFAULT);
+
+// Create with custom modifier
+TrackerModifier modifier = TrackerModifier.builder()
+    .sightTrace(true)
+    .damageAnimation(true)
+    .damageTint(true)
+    .build();
+
+EntityTracker tracker = BetterModelAPI.getInstance()
+    .createEntityTracker(entity, "model_name", modifier);
+```
+
+### Damage Effects
+
+```java
+EntityTracker tracker = ...;
+
+// Trigger damage tint when entity takes damage
+entity.onDamage(() -> {
+    tracker.damageTint();
+});
+
+// Custom damage tint color (purple)
+tracker.damageTintValue(0xFF00FF);
+tracker.damageTint();
+
+// Cancel damage tint early
+tracker.cancelDamageTint();
+```
+
+### Entity Synchronization
+
+```java
+EntityTracker tracker = ...;
+
+// Update entity data (e.g., after potion effect change)
+tracker.updateBaseEntity();
+
+// Refresh hitboxes and position
+tracker.refresh();
+
+// Get source entity
+BaseEntity entity = tracker.sourceEntity();
+if (entity.dead()) {
+    tracker.close();
+}
+```
+
+### HitBox and Mounting
+
+```java
+EntityTracker tracker = ...;
+
+// Create hitbox for interaction
+tracker.createHitBox(
+    HitBoxListener.builder()
+        .interact(event -> {
+            event.getPlayer().sendMessage("You clicked the model!");
+        })
+        .mount((hitbox, mountedEntity) -> {
+            System.out.println("Entity mounted: " + mountedEntity.name());
+        })
+        .dismount((hitbox, mountedEntity) -> {
+            System.out.println("Entity dismounted: " + mountedEntity.name());
+        })
+        .build(),
+    BonePredicate.name("saddle")
+);
+```
+
+### Body and Head Rotation
+
+```java
+EntityTracker tracker = ...;
+
+// Access body rotator for custom rotation logic
+EntityBodyRotator rotator = tracker.bodyRotator();
+
+// Get current rotation
+ModelRotation rotation = tracker.rotation();
+System.out.println("Pitch: " + rotation.pitch() + ", Yaw: " + rotation.yaw());
+```
+
+### Player-Specific Spawning
+
+```java
+EntityTracker tracker = ...;
+
+// Only spawn for specific players
+Set<UUID> allowedPlayers = Set.of(
+    player1.uuid(),
+    player2.uuid()
+);
+tracker.markPlayerForSpawn(allowedPlayers);
+
+// Check if can spawn
+if (tracker.canBeSpawnedAt(player)) {
+    System.out.println("Model will spawn for this player");
+}
+
+// Remove restriction
+tracker.unmarkPlayerForSpawn(player1);
+```
+
+### Hide Options
+
+```java
+EntityTracker tracker = ...;
+
+// Set hide option to hide original entity
+tracker.hideOption(EntityHideOption.HIDE);
+
+// Set to show both model and entity
+tracker.hideOption(EntityHideOption.SHOW);
+
+// Get current option
+EntityHideOption option = tracker.hideOption();
+```
+
+### Persistence
+
+```java
+EntityTracker tracker = ...;
+
+// Check if can be saved
+if (tracker.canBeSaved()) {
+    // Save tracker state
+    TrackerData data = tracker.asTrackerData();
+    // Store data to file/database
+}
+
+// Restore tracker (on entity spawn)
+TrackerData data = ...; // Load from storage
+EntityTracker tracker = BetterModelAPI.getInstance()
+    .createEntityTracker(entity, data);
+```
+
+## Events
+
+The following events are fired for entity trackers:
+
+- `CreateEntityTrackerEvent` - When the tracker is created
+- `MountModelEvent` - When an entity mounts a bone
+- `DismountModelEvent` - When an entity dismounts a bone
+- All standard `Tracker` events (spawn, despawn, close, etc.)
+
+## See Also
+
+- [Tracker](tracker) - Base tracker class
+- [DummyTracker](dummy-tracker) - Standalone tracker
+- [TrackerModifier](tracker-modifier) - Configuration options
+- [TrackerUpdateAction](tracker-update-action) - Update actions

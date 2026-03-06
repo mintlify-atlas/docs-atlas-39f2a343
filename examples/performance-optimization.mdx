@@ -1,0 +1,530 @@
+---
+title: Performance Optimization
+description: Best practices and techniques for optimizing BetterModel performance
+icon: gauge-high
+---
+
+Learn how to optimize BetterModel for large servers with many players and models.
+
+## Overview
+
+Performance optimization strategies:
+- Efficient tracker management
+- Animation optimization
+- Network packet optimization
+- Memory management
+- Async operations
+
+## Tracker Management
+
+### Efficient Tracker Creation
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.entity.BaseEntity;
+import kr.toxicity.model.api.tracker.EntityTracker;
+import kr.toxicity.model.api.tracker.TrackerModifier;
+import org.bukkit.entity.Entity;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class OptimizedTrackerManager {
+    
+    private final Map<UUID, EntityTracker> trackerCache = new ConcurrentHashMap<>();
+    
+    // GOOD: Use getOrCreate to prevent duplicates
+    public EntityTracker getTracker(Entity entity, String modelName) {
+        return trackerCache.computeIfAbsent(entity.getUniqueId(), uuid -> 
+            BetterModel.model(modelName)
+                .map(renderer -> renderer.getOrCreate(BaseEntity.of(entity)))
+                .orElse(null)
+        );
+    }
+    
+    // GOOD: Batch cleanup
+    public void cleanupInactiveTrackers() {
+        trackerCache.entrySet().removeIf(entry -> {
+            EntityTracker tracker = entry.getValue();
+            if (tracker.isClosed() || tracker.playerCount() == 0) {
+                tracker.close();
+                return true;
+            }
+            return false;
+        });
+    }
+    
+    // BAD: Creating multiple trackers
+    public void badExample(Entity entity) {
+        // Don't do this - creates duplicate trackers
+        BetterModel.model("model").ifPresent(r -> r.create(BaseEntity.of(entity)));
+        BetterModel.model("model").ifPresent(r -> r.create(BaseEntity.of(entity)));
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import kr.toxicity.model.api.entity.BaseEntity
+import kr.toxicity.model.api.tracker.EntityTracker
+import org.bukkit.entity.Entity
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+class OptimizedTrackerManager {
+    
+    private val trackerCache = ConcurrentHashMap<UUID, EntityTracker>()
+    
+    fun getTracker(entity: Entity, modelName: String): EntityTracker? {
+        return trackerCache.computeIfAbsent(entity.uniqueId) {
+            BetterModel.model(modelName)
+                .map { it.getOrCreate(BaseEntity.of(entity)) }
+                .orElse(null)
+        }
+    }
+    
+    fun cleanupInactiveTrackers() {
+        trackerCache.entries.removeIf { (_, tracker) ->
+            if (tracker.isClosed || tracker.playerCount() == 0) {
+                tracker.close()
+                true
+            } else false
+        }
+    }
+}
+```
+</CodeGroup>
+
+## Animation Optimization
+
+### Efficient Animation Updates
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.animation.AnimationModifier;
+import kr.toxicity.model.api.tracker.Tracker;
+import org.bukkit.entity.LivingEntity;
+
+public class AnimationOptimization {
+    
+    // GOOD: Cache animation state
+    private String currentAnimation = "idle";
+    
+    public void updateAnimation(Tracker tracker, LivingEntity entity) {
+        String newAnimation = determineAnimation(entity);
+        
+        // Only update if animation changed
+        if (!newAnimation.equals(currentAnimation)) {
+            tracker.stopAnimation(currentAnimation);
+            tracker.animate(newAnimation);
+            currentAnimation = newAnimation;
+        }
+    }
+    
+    // GOOD: Use tick intervals instead of every frame
+    public void setupOptimizedUpdates(Tracker tracker) {
+        // Update every 5 ticks (250ms) instead of every frame (25ms)
+        tracker.tick(5, (t, bundler) -> {
+            // Update logic
+        });
+    }
+    
+    // GOOD: Use predicates for conditional animations
+    public void setupConditionalAnimation(Tracker tracker, LivingEntity entity) {
+        tracker.animate("special", AnimationModifier.builder()
+            .predicate(() -> entity.getHealth() < entity.getMaxHealth() * 0.5)
+            .build()
+        );
+    }
+    
+    // BAD: Updating animation every frame without checking
+    public void badExample(Tracker tracker) {
+        tracker.tick((t, bundler) -> {
+            // Don't do this - wastes resources
+            t.stopAnimation("idle");
+            t.animate("idle");
+        });
+    }
+    
+    private String determineAnimation(LivingEntity entity) {
+        if (entity.getVelocity().lengthSquared() > 0.01) return "walk";
+        return "idle";
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.animation.AnimationModifier
+import kr.toxicity.model.api.tracker.Tracker
+import org.bukkit.entity.LivingEntity
+
+class AnimationOptimization {
+    
+    private var currentAnimation = "idle"
+    
+    fun updateAnimation(tracker: Tracker, entity: LivingEntity) {
+        val newAnimation = determineAnimation(entity)
+        
+        if (newAnimation != currentAnimation) {
+            tracker.stopAnimation(currentAnimation)
+            tracker.animate(newAnimation)
+            currentAnimation = newAnimation
+        }
+    }
+    
+    fun setupOptimizedUpdates(tracker: Tracker) {
+        tracker.tick(5) { t, _ ->
+            // Update logic
+        }
+    }
+    
+    fun setupConditionalAnimation(tracker: Tracker, entity: LivingEntity) {
+        tracker.animate("special", AnimationModifier.builder()
+            .predicate { entity.health < entity.maxHealth * 0.5 }
+            .build()
+        )
+    }
+    
+    private fun determineAnimation(entity: LivingEntity): String {
+        return if (entity.velocity.lengthSquared() > 0.01) "walk" else "idle"
+    }
+}
+```
+</CodeGroup>
+
+## Sight Trace Optimization
+
+### Visibility Management
+
+```java
+import kr.toxicity.model.api.tracker.TrackerModifier;
+import kr.toxicity.model.api.util.EntityUtil;
+import org.bukkit.entity.Player;
+
+public class VisibilityOptimization {
+    
+    // GOOD: Disable sight trace for static models
+    public TrackerModifier createStaticModifier() {
+        return TrackerModifier.builder()
+            .sightTrace(false) // No line-of-sight check needed
+            .damageAnimation(false)
+            .damageTint(false)
+            .build();
+    }
+    
+    // GOOD: Custom visibility check with caching
+    public void setupCustomVisibility(Tracker tracker) {
+        // Check every 10 ticks instead of every frame
+        tracker.tick(10, (t, bundler) -> {
+            t.getPipeline().viewFilter(player -> 
+                canSeeModel(player, t.location())
+            );
+        });
+    }
+    
+    private boolean canSeeModel(Player player, PlatformLocation location) {
+        // Custom visibility logic with distance check first
+        double distanceSq = player.getLocation().distanceSquared(location.toBukkit());
+        if (distanceSq > 2500) return false; // Beyond 50 blocks
+        
+        // Only do expensive line-of-sight check if within range
+        return EntityUtil.canSee(player.getEyeLocation(), location);
+    }
+}
+```
+
+## Update Action Optimization
+
+### Batching Updates
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.tracker.TrackerUpdateAction;
+import kr.toxicity.model.api.util.function.BonePredicate;
+
+public class UpdateOptimization {
+    
+    // GOOD: Composite updates
+    public void applyMultipleUpdates(Tracker tracker) {
+        tracker.update(TrackerUpdateAction.composite(
+            TrackerUpdateAction.glow(true),
+            TrackerUpdateAction.glowColor(0xFF0000),
+            TrackerUpdateAction.brightness(15, 15),
+            TrackerUpdateAction.enchant(true)
+        ));
+    }
+    
+    // GOOD: Use bone predicates efficiently
+    public void targetSpecificBones(Tracker tracker) {
+        // Cache predicate
+        BonePredicate armPredicate = BonePredicate.name("left_arm")
+            .or(BonePredicate.name("right_arm"));
+        
+        tracker.update(
+            TrackerUpdateAction.glow(true),
+            armPredicate
+        );
+    }
+    
+    // BAD: Multiple individual updates
+    public void badExample(Tracker tracker) {
+        // Don't do this - sends multiple packet bundles
+        tracker.update(TrackerUpdateAction.glow(true));
+        tracker.update(TrackerUpdateAction.glowColor(0xFF0000));
+        tracker.update(TrackerUpdateAction.brightness(15, 15));
+        tracker.update(TrackerUpdateAction.enchant(true));
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.tracker.TrackerUpdateAction
+import kr.toxicity.model.api.util.function.BonePredicate
+
+class UpdateOptimization {
+    
+    fun applyMultipleUpdates(tracker: Tracker) {
+        tracker.update(TrackerUpdateAction.composite(
+            TrackerUpdateAction.glow(true),
+            TrackerUpdateAction.glowColor(0xFF0000),
+            TrackerUpdateAction.brightness(15, 15),
+            TrackerUpdateAction.enchant(true)
+        ))
+    }
+    
+    fun targetSpecificBones(tracker: Tracker) {
+        val armPredicate = BonePredicate.name("left_arm")
+            .or(BonePredicate.name("right_arm"))
+        
+        tracker.update(
+            TrackerUpdateAction.glow(true),
+            armPredicate
+        )
+    }
+}
+```
+</CodeGroup>
+
+## Memory Management
+
+### Preventing Memory Leaks
+
+```java
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.UUID;
+
+public class MemoryManagement {
+    
+    // GOOD: Use WeakHashMap for temporary references
+    private final Map<UUID, EntityTracker> temporaryTrackers = new WeakHashMap<>();
+    
+    // GOOD: Clean up on plugin disable
+    public void onDisable() {
+        temporaryTrackers.values().forEach(tracker -> {
+            if (!tracker.isClosed()) {
+                tracker.close();
+            }
+        });
+        temporaryTrackers.clear();
+    }
+    
+    // GOOD: Remove listeners when done
+    public void cleanupTracker(EntityTracker tracker) {
+        // Close tracker properly
+        tracker.close();
+        
+        // Remove from caches
+        temporaryTrackers.remove(tracker.sourceEntity().uuid());
+    }
+    
+    // GOOD: Implement cleanup task
+    public void scheduleCleanup(JavaPlugin plugin) {
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            temporaryTrackers.entrySet().removeIf(entry -> {
+                EntityTracker tracker = entry.getValue();
+                return tracker.isClosed() || tracker.sourceEntity().dead();
+            });
+        }, 1200L, 1200L); // Every 60 seconds
+    }
+}
+```
+
+## Async Operations
+
+### Offloading Heavy Tasks
+
+<CodeGroup>
+```java Java
+import kr.toxicity.model.api.BetterModel;
+import org.bukkit.scheduler.BukkitRunnable;
+
+public class AsyncOptimization {
+    
+    // GOOD: Load models asynchronously
+    public void loadModelAsync(JavaPlugin plugin, String modelName, Consumer<ModelRenderer> callback) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                BetterModel.model(modelName).ifPresent(renderer -> {
+                    // Switch back to main thread for tracker creation
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            callback.accept(renderer);
+                        }
+                    }.runTask(plugin);
+                });
+            }
+        }.runTaskAsynchronously(plugin);
+    }
+    
+    // GOOD: Use BetterModel's async scheduler
+    public void asyncUpdate(Tracker tracker, Runnable heavyTask) {
+        BetterModel.platform().scheduler().asyncTask(() -> {
+            // Heavy computation
+            heavyTask.run();
+            
+            // Update on main thread
+            tracker.task(() -> {
+                // Apply results
+            });
+        });
+    }
+}
+```
+
+```kotlin Kotlin
+import kr.toxicity.model.api.BetterModel
+import org.bukkit.plugin.java.JavaPlugin
+import org.bukkit.scheduler.BukkitRunnable
+
+class AsyncOptimization {
+    
+    fun loadModelAsync(plugin: JavaPlugin, modelName: String, callback: (ModelRenderer) -> Unit) {
+        object : BukkitRunnable() {
+            override fun run() {
+                BetterModel.model(modelName).ifPresent { renderer ->
+                    object : BukkitRunnable() {
+                        override fun run() {
+                            callback(renderer)
+                        }
+                    }.runTask(plugin)
+                }
+            }
+        }.runTaskAsynchronously(plugin)
+    }
+    
+    fun asyncUpdate(tracker: Tracker, heavyTask: Runnable) {
+        BetterModel.platform().scheduler().asyncTask {
+            heavyTask.run()
+            tracker.task {
+                // Apply results
+            }
+        }
+    }
+}
+```
+</CodeGroup>
+
+## Best Practices Summary
+
+### Performance Checklist
+
+<Steps>
+  <Step title="Tracker Management">
+    - Use `getOrCreate()` to prevent duplicates
+    - Cache tracker references
+    - Implement cleanup tasks
+    - Use WeakHashMap for temporary references
+  </Step>
+  
+  <Step title="Animation Optimization">
+    - Cache animation states
+    - Use tick intervals instead of frames
+    - Only update when state changes
+    - Use predicates for conditional animations
+  </Step>
+  
+  <Step title="Network Optimization">
+    - Batch updates with `composite()`
+    - Disable unnecessary features (sight trace, damage tint)
+    - Use view distance limits
+    - Implement per-player animations sparingly
+  </Step>
+  
+  <Step title="Memory Management">
+    - Always close trackers when done
+    - Remove event listeners
+    - Clear caches periodically
+    - Monitor memory usage
+  </Step>
+</Steps>
+
+<Tip>
+  - Profile your plugin with tools like Spark
+  - Monitor tracker count with `/bettermodel debug`
+  - Use sight trace only when necessary
+  - Batch updates whenever possible
+  - Implement aggressive cleanup for temporary models
+</Tip>
+
+<Warning>
+  - Don't create trackers every tick
+  - Avoid updating animations without state checks
+  - Don't forget to close trackers
+  - Monitor network usage with many models
+  - Test with realistic player counts
+</Warning>
+
+## Monitoring Performance
+
+### Debug and Profiling
+
+```java
+import kr.toxicity.model.api.BetterModel;
+import kr.toxicity.model.api.config.DebugConfig;
+
+public class PerformanceMonitoring {
+    
+    public void enableDebugLogging() {
+        // Enable debug logging for specific components
+        BetterModel.config().debug().enable(DebugConfig.DebugOption.TRACKER);
+    }
+    
+    public void getModelStats() {
+        // Get loaded model count
+        int modelCount = BetterModel.models().size();
+        int limbCount = BetterModel.limbs().size();
+        
+        System.out.println("Loaded models: " + modelCount);
+        System.out.println("Loaded limbs: " + limbCount);
+    }
+    
+    public void logTrackerInfo(EntityTracker tracker) {
+        System.out.println("Tracker: " + tracker.name());
+        System.out.println("Players: " + tracker.playerCount());
+        System.out.println("Closed: " + tracker.isClosed());
+        System.out.println("Scheduled: " + tracker.isScheduled());
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Entity Model" icon="cube" href="/examples/basic-entity-model">
+    Start with optimized implementations
+  </Card>
+  <Card title="Installation" icon="gear" href="/installation">
+    Configure BetterModel settings
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/bettermodel">
+    Explore the complete API
+  </Card>
+  <Card title="Bukkit/Spigot/Paper" icon="wrench" href="/platforms/bukkit-spigot-paper">
+    Platform-specific guides
+  </Card>
+</CardGroup>

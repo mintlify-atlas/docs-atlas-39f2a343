@@ -1,0 +1,245 @@
+---
+title: Creating BlockBench Models
+description: Learn how to create and prepare BlockBench models for use with BetterModel
+icon: cube
+---
+
+## Overview
+
+BetterModel uses **BlockBench Generic models** (`.bbmodel` files) to render 3D models in Minecraft Java Edition. This guide walks you through creating, exporting, and configuring models for the plugin.
+
+## Prerequisites
+
+- [BlockBench](https://www.blockbench.net/) installed (free 3D modeling software)
+- Basic understanding of 3D modeling concepts
+- BetterModel plugin installed on your server
+
+## Creating Your First Model
+
+<Steps>
+
+### Open BlockBench and create a Generic model
+
+1. Launch BlockBench
+2. Click **File** → **New** → **Generic Model**
+3. Give your model a name (e.g., `demon_knight`)
+
+### Build your model structure
+
+Use cubes, groups, and bones to construct your model:
+
+- **Cubes**: The basic building blocks of your model
+- **Groups**: Organize cubes into logical parts (head, body, arms, etc.)
+- **Bones**: Define the hierarchy and pivot points for animation
+
+<Tip>
+Name your groups clearly (e.g., `head`, `body`, `left_arm`). These names are used in the API to reference specific parts.
+</Tip>
+
+### Add textures
+
+1. Click the **Paint** tab
+2. Import or create textures for your model
+3. Apply textures to individual cubes
+
+### Create animations
+
+1. Switch to the **Animate** tab
+2. Create a new animation (e.g., `walk`, `attack`, `idle`)
+3. Add keyframes by moving, rotating, or scaling bones
+4. Set the animation loop mode (Loop, Once, or Hold)
+
+### Export your model
+
+1. Click **File** → **Export** → **Export BlockBench Model**
+2. Save as `.bbmodel` format
+3. Keep the texture files in the same directory
+
+</Steps>
+
+## Directory Structure
+
+Place your exported model files in the BetterModel plugin directory:
+
+```
+plugins/
+└── BetterModel/
+    ├── models/           # For general entity models
+    │   └── demon_knight.bbmodel
+    └── players/          # For player limb models
+        └── steve.bbmodel
+```
+
+<Note>
+- **`models/`**: General models that can be attached to entities and saved
+- **`players/`**: Player-specific limb models (12-limb animation system)
+</Note>
+
+## Model Types
+
+### General Models
+
+General models are used for entities, NPCs, and standalone objects. They support:
+
+- Full save/load functionality
+- Entity binding and tracking
+- Custom hitboxes
+- Damage animations and tinting
+
+```java
+// Load a general model
+ModelRenderer model = BetterModel.model("demon_knight").orElse(null);
+```
+
+### Player Limb Models
+
+Player limb models are designed for the 12-limb player animation system:
+
+- Head, Body, Arms, Legs
+- Left/Right Arm Layers, Left/Right Leg Layers
+- Cape support
+- No persistent saving
+
+```java
+// Load a player limb model
+ModelRenderer limb = BetterModel.limb("steve").orElse(null);
+```
+
+## Best Practices
+
+### Naming Conventions
+
+Use descriptive, consistent names for bones and groups:
+
+```
+model_root
+├── head
+├── body
+├── left_arm
+├── right_arm
+├── left_leg
+└── right_leg
+```
+
+### Bone Tags
+
+BetterModel recognizes special bone tags for automatic behavior:
+
+- **`head`**: Applies head rotation tracking
+- **`hitbox`**: Automatically creates a hitbox for this bone
+- **`tag`**: Creates a nametag display
+- **`shadow`**: Adds a shadow underneath the model
+
+Add tags in BlockBench by selecting a bone and adding them in the properties panel.
+
+### Pivot Points
+
+Set correct pivot points for natural rotation:
+
+- Arms should pivot at the shoulder
+- Legs should pivot at the hip
+- Head should pivot at the base of the neck
+
+### Texture Resolution
+
+<Warning>
+Keep texture resolution reasonable (512x512 or lower) to avoid client performance issues and resource pack bloat.
+</Warning>
+
+### Animation Length
+
+Consider the purpose of each animation:
+
+- **Idle**: 2-4 seconds (loop)
+- **Walk**: 0.5-1 second (loop)
+- **Attack**: 0.3-0.6 seconds (once)
+- **Death**: 1-2 seconds (once)
+
+## Testing Your Model
+
+<Steps>
+
+### Place the model file
+
+Copy your `.bbmodel` file to `plugins/BetterModel/models/`
+
+### Reload the plugin
+
+Run `/bettermodel reload` to load the new model
+
+### Spawn the model
+
+Use the API or plugin commands to spawn your model in-game:
+
+```java
+EntityTracker tracker = BetterModel.model("demon_knight")
+    .map(r -> r.create(BukkitAdapter.adapt(entity)))
+    .orElse(null);
+```
+
+### Test animations
+
+Play animations to verify they work correctly:
+
+```java
+tracker.animate("walk");
+tracker.animate("attack", AnimationModifier.DEFAULT_WITH_PLAY_ONCE);
+```
+
+</Steps>
+
+## Common Issues
+
+### Model doesn't appear
+
+- Check console for loading errors
+- Verify the `.bbmodel` file is in the correct directory
+- Ensure texture files are accessible
+- Reload the plugin after making changes
+
+### Animations are broken
+
+- Check that bone names match between BlockBench and your code
+- Verify animation loop settings
+- Ensure pivot points are correctly positioned
+
+### Textures are missing
+
+- Keep texture files in the same directory as the `.bbmodel`
+- Use relative paths in BlockBench
+- Check file permissions
+
+## Advanced Techniques
+
+### Custom Model Properties
+
+Create a model configuration file to customize behavior:
+
+```yaml
+# models/demon_knight.yml
+name: demon_knight
+scale: 1.5
+default-animation: idle
+hitbox:
+  width: 1.0
+  height: 2.0
+```
+
+### Molang Expressions
+
+BetterModel supports Molang expressions in animations for dynamic behavior based on game state.
+
+### Multiple Texture Variants
+
+Create texture variants by duplicating the model with different texture references for customization.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Spawning Entities" icon="wand-magic-sparkles" href="/guides/spawning-entities">
+    Learn how to spawn and bind models to entities
+  </Card>
+  <Card title="Playing Animations" icon="play" href="/guides/playing-animations">
+    Control animations programmatically
+  </Card>
+</CardGroup>

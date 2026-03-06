@@ -1,0 +1,294 @@
+---
+title: RenderedBone
+description: A rendered bone represents a single item display entity in the model hierarchy
+---
+
+The `RenderedBone` interface represents a rendered item display entity in BetterModel's bone system. Each bone can have animations, transformations, items, and hitboxes attached to it.
+
+## Class Information
+
+**Package:** `kr.toxicity.model.api.bone`  
+**Type:** Final Class  
+**Since:** 1.0.0
+
+## Hierarchy and Structure
+
+### Parent and Children
+
+```java
+public RenderedBone getRoot()
+public RenderedBone getParent()
+public SequencedSet<RenderedBone> flattenBones()
+public Stream<RenderedBone> flatten()
+```
+
+Every bone has a reference to its root bone and optional parent. Use `flattenBones()` to get all descendant bones as a flattened collection.
+
+**Example:**
+```java
+renderedBone.flatten().forEach(bone -> {
+    System.out.println("Bone: " + bone.name());
+});
+```
+
+## Identification
+
+```java
+public BoneName name()
+public UUID uuid()
+public RendererGroup getGroup()
+```
+
+Each bone has a unique name and UUID. The `RendererGroup` contains metadata about the bone's visual properties.
+
+## Item Management
+
+### Changing the Item
+
+```java
+public boolean itemStack(Predicate<RenderedBone> predicate, TransformedItemStack itemStack)
+public boolean updateItem(Predicate<RenderedBone> predicate)
+public boolean updateItem(BoneRenderContext context)
+```
+
+Update the displayed item for this bone and its descendants.
+
+**Example:**
+```java
+// Change item for all bones with specific tag
+bone.itemStack(
+    b -> b.name().tagged(BoneTag.of("weapon")),
+    transformedItemStack
+);
+```
+
+### Item Appearance
+
+```java
+public boolean enchant(Predicate<RenderedBone> predicate, boolean enchant)
+public boolean tint(Predicate<RenderedBone> predicate, int tint)
+public void setItemMapper(BoneItemMapper itemMapper)
+```
+
+Control visual effects like enchantment glint and color tinting.
+
+**Example:**
+```java
+// Add enchantment glint to sword bones
+bone.enchant(b -> b.name().name().contains("sword"), true);
+
+// Tint bones red (0xFF0000)
+bone.tint(b -> true, 0xFF0000);
+```
+
+## Animation Control
+
+```java
+public boolean addAnimation(
+    AnimationOverrideState overrideState,
+    BlueprintAnimation animator,
+    AnimationModifier modifier,
+    Runnable removeTask
+)
+
+public boolean replaceAnimation(
+    AnimationOverrideState overrideState,
+    String target,
+    BlueprintAnimation animator,
+    AnimationModifier modifier
+)
+
+public boolean stopAnimation(
+    Predicate<RenderedBone> filter,
+    String name,
+    PlatformPlayer player
+)
+
+public RunningAnimation runningAnimation()
+```
+
+Manage animations on bones. Animations can be global or per-player.
+
+**Example:**
+```java
+// Stop animation for specific bones
+bone.stopAnimation(
+    BonePredicate.name("head").withChildren(),
+    "nod_animation",
+    player
+);
+```
+
+## Hit Box Management
+
+```java
+public boolean createHitBox(
+    BaseEntity entity,
+    Predicate<RenderedBone> predicate,
+    HitBoxListener listener
+)
+
+public HitBox getHitBox()
+```
+
+Create interactive hitboxes for collision and interaction detection.
+
+**Example:**
+```java
+// Create hitbox with interaction listener
+HitBoxListener listener = HitBoxListener.builder()
+    .interact(event -> {
+        event.player().sendMessage("You clicked: " + event.getHitBox().groupName());
+    })
+    .damage(event -> {
+        event.player().sendMessage("You hit for " + event.damage() + " damage!");
+    })
+    .build();
+
+bone.createHitBox(
+    entity,
+    b -> b.name().tagged(BoneTag.of("hitbox")),
+    listener
+);
+```
+
+## Position and Transformation
+
+### World Position
+
+```java
+public Vector3f worldPosition()
+public Vector3f worldPosition(BonePosition position)
+public Vector3f worldPosition(BoneMovement cache)
+public Vector3f worldRotation()
+public Vector3f worldRotation(UUID uuid)
+```
+
+Get the bone's position in world coordinates.
+
+### Modifiers
+
+```java
+public boolean addPositionModifier(
+    Predicate<RenderedBone> predicate,
+    Function<Vector3f, Vector3f> function
+)
+
+public boolean addRotationModifier(
+    Predicate<RenderedBone> predicate,
+    Function<Quaternionf, Quaternionf> function
+)
+
+public void scale(FloatSupplier scale)
+public void defaultPosition(Supplier<Vector3f> movement)
+```
+
+Apply transformation functions to modify bone positioning dynamically.
+
+**Example:**
+```java
+// Add bounce effect to position
+bone.addPositionModifier(
+    b -> b.name().name().equals("head"),
+    pos -> pos.add(0, Math.sin(System.currentTimeMillis() / 200.0) * 0.1, 0)
+);
+
+// Scale bone dynamically
+bone.scale(() -> 1.0f + (float) Math.sin(System.currentTimeMillis() / 1000.0) * 0.2f);
+```
+
+## Display Control
+
+```java
+public ModelDisplay getDisplay()
+public boolean applyAtDisplay(
+    Predicate<RenderedBone> predicate,
+    Consumer<ModelDisplay> consumer
+)
+public boolean isDummyBone()
+```
+
+Access and manipulate the underlying display entity.
+
+**Example:**
+```java
+// Modify display properties
+bone.applyAtDisplay(
+    b -> b.name().tagged(BoneTag.of("glow")),
+    display -> display.glowing(true)
+);
+```
+
+## Nametag Management
+
+```java
+public ModelNametag getNametag()
+public boolean createNametag(
+    Predicate<RenderedBone> predicate,
+    Consumer<ModelNametag> consumer
+)
+```
+
+Attach text displays to bones.
+
+**Example:**
+```java
+bone.createNametag(
+    b -> b.name().name().equals("head"),
+    nametag -> nametag.text("Player Name")
+);
+```
+
+## Tree Matching
+
+```java
+public boolean matchTree(
+    BonePredicate predicate,
+    BiPredicate<RenderedBone, BonePredicate> mapper
+)
+
+public boolean matchAnimation(
+    AnimationOverrideState overrideState,
+    BiPredicate<RenderedBone, AnimationOverrideState> mapper
+)
+```
+
+Traverse the bone hierarchy with custom predicates and actions.
+
+## Updates and Rendering
+
+```java
+public boolean tick()
+public boolean tick(UUID uuid)
+public void dirtyUpdate(PacketBundler bundler)
+public void forceUpdate(boolean showItem, PacketBundler bundler)
+public void sendTransformation(UUID uuid, PacketBundler bundler)
+```
+
+Manually control bone updates and packet sending.
+
+## Lifecycle
+
+```java
+public void spawn(boolean hide, PacketBundler bundler)
+public void teleport(PlatformLocation location, PacketBundler bundler)
+public void remove(PacketBundler bundler)
+public boolean rotate(ModelRotation rotation, PacketBundler bundler)
+```
+
+Control the bone's visibility and location in the world.
+
+## Event Handling
+
+```java
+public BoneEventDispatcher eventDispatcher()
+```
+
+Access the event dispatcher for listening to bone lifecycle events.
+
+## See Also
+
+- [BoneName](/api/bone-name) - Bone identification
+- [BonePredicate](/api/bone-predicate) - Filtering bones
+- [HitBox](/api/hitbox) - Interactive collision detection
+- [HitBoxListener](/api/hitbox-listener) - Hitbox event handling
